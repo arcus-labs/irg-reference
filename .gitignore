@@ -1,0 +1,31 @@
+# Editor / IDE
+.idea
+.vscode
+
+# Local notes / agent scratch
+.llm-notes
+.claude/
+
+# Secrets — keep .env.example tracked
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Dependencies / build artifacts
+node_modules/
+.next/
+dist/
+build/
+*.tsbuildinfo
+
+# Lock files (sub-packages handle their own)
+*/package-lock.json
+
+# Runtime data
+trace-navigator/traces/*
+_fact-store/*
+
+# OS noise
+.DS_Store
+Thumbs.db

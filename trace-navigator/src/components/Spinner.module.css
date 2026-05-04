@@ -1,0 +1,29 @@
+/* Spinner animation styles */
+
+.spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+.spinnerSvg {
+  width: 100%;
+  height: 100%;
+}
+
+.spinnerCircle {
+  opacity: 0.25;
+}
+
+.spinnerPath {
+  opacity: 0.75;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+

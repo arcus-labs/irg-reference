@@ -1,0 +1,41 @@
+{
+  "servicePorts": {
+    "traceNavigator": 3000,
+    "irgApi": 2100
+  },
+  "traceNavigatorRequestDefaults": {
+    "query": "Summarize our Q3 product roadmap risks.",
+    "context": {
+      "team": "IRG",
+      "project": "reference"
+    },
+    "maxIterations": 4,
+    "confidenceThreshold": 0.8,
+    "model": "llama-3.1-8b-instant",
+    "maxTokens": 10000,
+    "enableFactCheck": true,
+    "enableImpactPrediction": true,
+    "enableAssessor": true,
+    "enableFactCheckPipeline": true
+  },
+  "irgApiRequestDefaults": {
+    "context": {},
+    "maxIterations": 4,
+    "confidenceThreshold": 0.8,
+    "model": "llama-3.3-70b-versatile",
+    "maxTokens": 10000,
+    "enableFactCheck": true,
+    "enableImpactPrediction": true,
+    "enableAssessor": true,
+    "enableFactCheckPipeline": false
+  },
+  "factCheckPipelineRequestDefaults": {
+    "query": "Standalone fact-check pipeline request",
+    "context": {},
+    "maxIterations": 2,
+    "confidenceThreshold": 0.8,
+    "model": "llama-3.3-70b-versatile",
+    "maxTokens": 6000,
+    "enableFactCheckPipeline": true
+  }
+}

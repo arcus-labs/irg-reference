@@ -1,0 +1,20 @@
+/* Timeline Line Color Override
+   This file is imported AFTER the react-vertical-timeline-component CSS
+   to ensure our styles take precedence */
+
+.vertical-timeline {
+  overflow-x: hidden !important;
+}
+
+.vertical-timeline::before {
+  background: var(--line-color) !important;
+  opacity: 0.6 !important;
+  mask-image: linear-gradient(to bottom, black 0%, black 85%, transparent 100%) !important;
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 85%, transparent 100%) !important;
+}
+
+/* Adjust timeline icon circle position */
+.vertical-timeline-element-icon {
+  margin-left: -22px !important;
+}
+
