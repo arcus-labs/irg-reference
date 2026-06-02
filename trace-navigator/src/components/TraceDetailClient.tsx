@@ -39,9 +39,17 @@ export default function TraceDetailClient({ filename }: TraceDetailClientProps) 
   useEffect(() => {
     if (!mounted) return;
 
+    // Reset on every filename change so a previously-loaded trace can't
+    // linger on screen while the new one is being fetched.
+    setTrace(null);
+    setLoading(true);
+    setError('');
+
+    let cancelled = false;
     const loadTrace = async () => {
       try {
-        const res = await fetch(`/api/traces/${encodeURIComponent(filename)}`);
+        const res = await fetch(`/api/traces/${encodeURIComponent(filename)}`, { cache: 'no-store' });
+        if (cancelled) return;
         if (res.status === 401) {
           router.push('/login');
           return;
@@ -51,16 +59,19 @@ export default function TraceDetailClient({ filename }: TraceDetailClientProps) 
           return;
         }
         const data = await res.json();
+        if (cancelled) return;
         setTrace(data);
       } catch (error) {
+        if (cancelled) return;
         console.error('Failed to load trace:', error);
         setError('Error loading trace');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     loadTrace();
+    return () => { cancelled = true; };
   }, [filename, mounted]);
 
   // Don't render anything until mounted to avoid hydration mismatch
@@ -124,7 +135,7 @@ export default function TraceDetailClient({ filename }: TraceDetailClientProps) 
         </div>
 
         <div style={{ width: '100%', overflowX: 'auto' }}>
-          <TraceNavigator trace={trace} />
+          <TraceNavigator trace={trace} filename={filename} />
         </div>
       </div>
     </main>

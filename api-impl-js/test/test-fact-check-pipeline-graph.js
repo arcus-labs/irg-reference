@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const yaml = require('js-yaml');
 const { runLinearGraph } = require('../core/execution/irg-interpreter-linear');
-const { factCheckPipelineGraphLinear } = require('../graphs/fact-check-pipeline-graph-linear');
+const { factCheckPipelineGraph } = require('../graphs/fact-check-pipeline-graph');
 const nodeRegistry = require('../core/execution/irg-node-registry');
 
 const promptsPath = path.join(__dirname, '../core/prompts/irg-prompts.yaml');
@@ -59,7 +59,7 @@ async function runTest() {
     };
 
     const result = await runLinearGraph(
-      factCheckPipelineGraphLinear,
+      factCheckPipelineGraph,
       {
         originalQuery: 'Check whether Saturn has rings.',
         context: 'Astronomy sanity check',

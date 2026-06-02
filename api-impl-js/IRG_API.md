@@ -211,9 +211,16 @@ API_KEY_GROQ=your_api_key_here
 
 The server loads:
 - Prompts from `core/prompts/irg-prompts.yaml`
-- Graph definition from `graphs/irg-graph-linear.js`
+- Graph definitions from `graphs/irg-graph-linear-simple.js` and `graphs/irg-graph-external-facts.js`
 - Node registry from `core/execution/irg-node-registry.js`
-- Groq LLM client from `core/llm/groq-llm-client.js`
+- LLM client factory from `core/llm/index.js`
 
 All changes to these files are reflected immediately on the next request.
+
+## Selecting a graph
+
+Set `"graph"` in the request body:
+
+- `"irg-simple"` (default) — internal fact-check only
+- `"irg-external-facts"` — full pipeline with external fact-store lookup, optional citation generation and write
 

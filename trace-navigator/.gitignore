@@ -41,3 +41,6 @@ yarn-error.log*
 next-env.d.ts
 
 .llm-notes/*
+# X-ray IRG runtime data (migrated HealthTech app)
+/data/xray-cases
+/public/xray-uploads

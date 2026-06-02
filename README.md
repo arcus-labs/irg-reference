@@ -140,7 +140,7 @@ curl -X POST http://localhost:2100/webhook/fact-check-process \
 Selectable per-request via the `graph` field:
 
 - **`irg-simple`** (default) — clarify → strategy → adversary → arbiter → factCheck → impact → draft → metaEvaluation → assessor → convergence
-- **`irg-full`** — adds the external fact-check pipeline (cache lookup, citation source generation, citation write) between fact-check and impact
+- **`irg-external-facts`** — adds the external fact-check pipeline (cache lookup, citation source generation, citation write) between fact-check and impact
 
 See `irg-flow-diagram.md` for a visual.
 
@@ -165,11 +165,9 @@ This reference implementation has **no authentication** on the API server and **
 
 - [`api-impl-js/IRG_API.md`](./api-impl-js/IRG_API.md) — full API reference
 - [`_docs/Iterative_Reasoning_Graphs.md`](./_docs/Iterative_Reasoning_Graphs.md) — IRG protocol writeup
-- [`_docs/Epistemic_Integrity_Evaluations.md`](./_docs/Epistemic_Integrity_Evaluations.md) — EIE protocol writeup
-- [`_docs/EIE-questions.md`](./_docs/EIE-questions.md) — EIE standard question set
+- [`_docs/Citation_Application.md`](./_docs/Citation_Application.md) — citation grounding writeup
 - [`trace-navigator/README.md`](./trace-navigator/README.md) — trace viewer setup
 - [`irg-flow-diagram.md`](./irg-flow-diagram.md) — graph flow chart
-- [`agentic-coder-flow.md`](./agentic-coder-flow.md) — applying IRG to coding agents
 
 ## Contributing
 

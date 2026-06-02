@@ -22,6 +22,7 @@ export default function Home() {
   const [graph, setGraph] = useState<string>(traceNavigatorRequestDefaults.graph);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [provider, setProvider] = useState<string>('');
+  const [providersLoaded, setProvidersLoaded] = useState<boolean>(false);
   const [model, setModel] = useState<string>(traceNavigatorRequestDefaults.model);
   const [maxIterations, setMaxIterations] = useState<number>(traceNavigatorRequestDefaults.maxIterations);
   const [confidenceThreshold, setConfidenceThreshold] = useState<number>(traceNavigatorRequestDefaults.confidenceThreshold);
@@ -48,6 +49,8 @@ export default function Home() {
       }
     } catch (err) {
       console.error('Failed to load providers:', err);
+    } finally {
+      setProvidersLoaded(true);
     }
   };
 
@@ -59,6 +62,8 @@ export default function Home() {
 
   const currentProviderModels =
     providers.find((p) => p.name === provider)?.models ?? [];
+  const noProvidersConfigured = providersLoaded && providers.length === 0;
+  const submitDisabled = loading || !prompt.trim() || !providersLoaded || providers.length === 0;
 
   const loadTraces = async () => {
     try {
@@ -135,6 +140,40 @@ export default function Home() {
         <p style={{ fontSize: '1.5rem', color: 'var(--stone)', lineHeight: 1.8 }}>Iterative Reasoning Graph</p>
         <h1 style={{ fontSize: 'clamp(2.4rem, 5vw, 3.6rem)', fontFamily: 'var(--serif)', fontWeight: 400, marginBottom: '1rem', color: 'var(--ink)' }}>Trace Navigator</h1>
         <p style={{ fontSize: '1.05rem', color: 'var(--stone)', lineHeight: 1.8 }}>Visualize and explore reasoning traces</p>
+        <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <a
+            href="/fintech"
+            style={{
+              padding: '0.5rem 1rem',
+              background: 'var(--accent)',
+              color: 'var(--paper)',
+              borderRadius: '3px',
+              fontFamily: 'var(--sans)',
+              fontSize: '0.88rem',
+              fontWeight: 500,
+              textDecoration: 'none',
+              letterSpacing: '0.02em',
+            }}
+          >
+            Fintech Scenarios →
+          </a>
+          <a
+            href="/medical/xray"
+            style={{
+              padding: '0.5rem 1rem',
+              background: 'var(--accent-light)',
+              color: 'var(--paper)',
+              borderRadius: '3px',
+              fontFamily: 'var(--sans)',
+              fontSize: '0.88rem',
+              fontWeight: 500,
+              textDecoration: 'none',
+              letterSpacing: '0.02em',
+            }}
+          >
+            HealthTech: X-ray Analysis →
+          </a>
+        </div>
       </div>
 
       {/* Search Section */}
@@ -336,10 +375,10 @@ export default function Home() {
               <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
                 <button
                   type="submit"
-                  disabled={loading || !prompt.trim()}
+                  disabled={submitDisabled}
                   style={{
                     flex: 1,
-                    background: loading || !prompt.trim() ? 'var(--stone-light)' : 'var(--accent)',
+                    background: submitDisabled ? 'var(--stone-light)' : 'var(--accent)',
                     color: 'var(--paper)',
                     border: 'none',
                     borderRadius: '2px',
@@ -348,7 +387,7 @@ export default function Home() {
                     fontSize: '0.88rem',
                     fontWeight: 500,
                     letterSpacing: '0.02em',
-                    cursor: loading || !prompt.trim() ? 'not-allowed' : 'pointer',
+                    cursor: submitDisabled ? 'not-allowed' : 'pointer',
                     transition: 'background 0.2s',
                     display: 'flex',
                     alignItems: 'center',
@@ -356,19 +395,28 @@ export default function Home() {
                     gap: '0.5rem',
                   }}
                   onMouseEnter={(e) => {
-                    if (!loading && prompt.trim()) {
+                    if (!submitDisabled) {
                       e.currentTarget.style.background = 'var(--accent-hover)';
                     }
                   }}
                   onMouseLeave={(e) => {
-                    if (!loading && prompt.trim()) {
+                    if (!submitDisabled) {
                       e.currentTarget.style.background = 'var(--accent)';
                     }
                   }}
                 >
-                  {loading ? 'Generating Trace...' : 'Generate Trace'}
+                  {loading
+                    ? 'Generating Trace...'
+                    : !providersLoaded
+                      ? 'Loading providers…'
+                      : 'Generate Trace'}
                 </button>
               </div>
+              {noProvidersConfigured && (
+                <p style={{ color: 'var(--code-keyword)', fontSize: '0.88rem', marginTop: '1rem' }}>
+                  No LLM providers are configured. Set at least one <code>API_KEY_*</code> in your <code>.env</code> file (or run a local Ollama) and restart the API server.
+                </p>
+              )}
               {error && (
                 <p style={{ color: 'var(--code-keyword)', fontSize: '0.88rem', marginTop: '1rem' }}>{error}</p>
               )}

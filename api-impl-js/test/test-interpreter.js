@@ -14,27 +14,32 @@ const assert = require('assert');
 const path = require('path');
 const fs = require('fs');
 const { runLinearGraph } = require('../core/execution/irg-interpreter-linear');
-const { irgGraphLinear } = require('../graphs/irg-graph-linear');
+const { irgGraphExternalFacts: irgGraphLinear } = require('../graphs/irg-graph-external-facts');
 const nodeRegistry = require('../core/execution/irg-node-registry');
 const { formatTrace } = require('../core/tracing/trace-formatter');
 
-// Output directory for traces
-const TRACES_DIR = path.resolve(__dirname, '../../trace-navigator/traces');
+// Trace fixtures from this suite are SYNTHETIC (mock LLM, hardcoded inputs).
+// They must NOT land in the live `trace-navigator/traces/` folder, or they
+// masquerade as real user traces in the navigator. So:
+//   - saving is opt-in via SAVE_TRACES=1 (default: off — assertions still run)
+//   - when enabled, fixtures go to a `_fixtures/` subdir that the navigator's
+//     list route ignores (it only lists *.irg/*.json/*.yaml files, not dirs).
+const SAVE_TRACES = !!process.env.SAVE_TRACES;
+const TRACES_DIR = path.resolve(__dirname, '../../trace-navigator/traces/_fixtures');
 
-// Ensure traces directory exists
-if (!fs.existsSync(TRACES_DIR)) {
-  fs.mkdirSync(TRACES_DIR, { recursive: true });
-}
-
-// Helper function to save trace
+// Helper function to save trace (no-op unless SAVE_TRACES is set)
 function saveTrace(testName, result) {
+  if (!SAVE_TRACES) return;
   try {
+    if (!fs.existsSync(TRACES_DIR)) {
+      fs.mkdirSync(TRACES_DIR, { recursive: true });
+    }
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `${testName.replace(/\s+/g, '-')}_${timestamp}.json`;
     const filepath = path.join(TRACES_DIR, filename);
 
     fs.writeFileSync(filepath, JSON.stringify(result, null, 2));
-    console.log(`  📁 Trace saved: ${filename}`);
+    console.log(`  📁 Trace fixture saved: _fixtures/${filename}`);
   } catch (err) {
     console.error(`  ❌ Failed to save trace: ${err.message}`);
   }
@@ -198,8 +203,12 @@ async function testLinearExecution() {
     assert.equal(result.externalFactCheckResult.retrieval_mode, 'filesystem_cache_only');
     assert.equal(result.externalFactCheckResult.claims.length, 1);
     assert.equal(result.draftResult.execution_contract.response_policy.policy, 'answer_normally');
+    // state.factCheckResult carries both the artifact metadata (path,
+    // fact_store_root — for downstream rehydration) AND the inline
+    // critical_claims (for nodes like memory-recall that consume the
+    // claims directly without a disk read).
     assert.ok(result.factCheckResult?.artifact_path);
-    assert.equal(result.factCheckResult.critical_claims, undefined);
+    assert.ok(Array.isArray(result.factCheckResult.critical_claims) && result.factCheckResult.critical_claims.length > 0);
     assert.equal(result.factCheckResult.fact_store_root, tempRoot);
     assert.equal(result.externalFactCheckResult.fact_store_root, tempRoot);
 
@@ -323,13 +332,20 @@ async function testNodeRegistry() {
   const clarifyNode = nodeRegistry.getNode('clarify');
   console.log(`✓ Retrieved clarify node: ${clarifyNode.id}`);
 
-  return nodeIds.length === 17
+  return nodeIds.length === 24
     && nodeIds.includes('strategyGate')
     && nodeIds.includes('assessor')
     && nodeIds.includes('externalFactCheck')
     && nodeIds.includes('factCheckPipelineGate')
     && nodeIds.includes('citationSourceGeneration')
-    && nodeIds.includes('citationWrite');
+    && nodeIds.includes('citationWrite')
+    && nodeIds.includes('citationFetch')
+    && nodeIds.includes('citationVerify')
+    && nodeIds.includes('citationApply')
+    && nodeIds.includes('citationQuality')
+    && nodeIds.includes('memoryRecall')
+    && nodeIds.includes('caseRecall')
+    && nodeIds.includes('classifyCase');
 }
 
 // Test 4: Graph definition structure

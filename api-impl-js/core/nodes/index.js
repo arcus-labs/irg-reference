@@ -17,8 +17,15 @@ const externalFactCheckNode = require('./external-fact-check-node');
 const factCheckPipelineGateNode = require('./fact-check-pipeline-gate-node');
 const citationSourceGenerationNode = require('./citation-source-generation-node');
 const citationWriteNode = require('./citation-write-node');
+const citationFetchNode = require('./citation-fetch-node');
+const citationVerifyNode = require('./citation-verify-node');
+const memoryRecallNode = require('./memory-recall-node');
+const caseRecallNode = require('./case-recall-node');
+const classifyCaseNode = require('./classify-case-node');
 const impactNode = require('./impact-node');
 const draftNode = require('./draft-node');
+const citationApplyNode = require('./citation-apply-node');
+const citationQualityNode = require('./citation-quality-node');
 const metaEvaluationNode = require('./meta-evaluation-node');
 const assessorNode = require('./assessor-node');
 const convergenceNode = require('./convergence-node');
@@ -36,8 +43,15 @@ module.exports = {
   factCheckPipelineGateNode,
   citationSourceGenerationNode,
   citationWriteNode,
+  citationFetchNode,
+  citationVerifyNode,
+  memoryRecallNode,
+  caseRecallNode,
+  classifyCaseNode,
   impactNode,
   draftNode,
+  citationApplyNode,
+  citationQualityNode,
   metaEvaluationNode,
   assessorNode,
   convergenceNode,

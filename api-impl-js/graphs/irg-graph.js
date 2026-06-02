@@ -12,14 +12,14 @@ const fs = require('fs');
 const path = require('path');
 const { parseYamlOnly } = require('../core/parsing/yaml-format-utils');
 const { runLinearGraph } = require('../core/execution/irg-interpreter-linear');
-const { irgGraphLinear } = require('./irg-graph-linear');
+const { irgGraphExternalFacts } = require('./irg-graph-external-facts');
 const nodeRegistry = require('../core/execution/irg-node-registry');
 
 // ---------------------------------------------------------------------------
 // Legacy exports (for backward compatibility)
 // ---------------------------------------------------------------------------
 
-const irgGraph = irgGraphLinear;
+const irgGraph = irgGraphExternalFacts;
 
 function loadPrompts(promptsPath) {
   const resolved = promptsPath || path.join(__dirname, '../core/prompts/irg-prompts.yaml');
@@ -47,7 +47,7 @@ async function runGraph(initialState, llmClient, prompts) {
     get: (nodeId) => nodeRegistry.getNode(nodeId),
   };
 
-  return runLinearGraph(irgGraphLinear, initialState, llmClient, resolvedPrompts, registryWrapper);
+  return runLinearGraph(irgGraphExternalFacts, initialState, llmClient, resolvedPrompts, registryWrapper);
 }
 
 // ---------------------------------------------------------------------------
@@ -58,7 +58,9 @@ module.exports = {
   irgGraph,
   loadPrompts,
   runGraph,
-  irgGraphLinear,
+  irgGraphExternalFacts,
+  // Legacy alias for backward compatibility with older callers.
+  irgGraphLinear: irgGraphExternalFacts,
   interpreter,
 };
 

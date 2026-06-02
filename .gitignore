@@ -21,6 +21,7 @@ build/
 
 # Lock files (sub-packages handle their own)
 */package-lock.json
+/package-lock.json
 
 # Runtime data
 trace-navigator/traces/*

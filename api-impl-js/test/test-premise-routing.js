@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
 const { runLinearGraph } = require('../core/execution/irg-interpreter-linear');
-const { irgGraphLinear } = require('../graphs/irg-graph-linear');
+const { irgGraphExternalFacts: irgGraphLinear } = require('../graphs/irg-graph-external-facts');
 const nodeRegistry = require('../core/execution/irg-node-registry');
 
 const prompts = yaml.load(fs.readFileSync(path.join(__dirname, '../core/prompts/irg-prompts.yaml'), 'utf8'));

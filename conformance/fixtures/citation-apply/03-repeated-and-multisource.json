@@ -1,0 +1,72 @@
+{
+  "name": "repeated claim shares seq; multi-source tag; dense renumber by appearance",
+  "draft_with_tags": "First <citation ref=\"cit_2\">moons of Mars</citation>, then a refuted myth <citation ref=\"cit_1 cit_3\">that the Sun orbits Earth</citation>, and again <citation ref=\"cit_2\">two moons</citation>.",
+  "citable_set": [
+    {
+      "handle": "cit_1",
+      "uuid": "aaaaaaaa-aaaa-5aaa-8aaa-aaaaaaaaaaaa",
+      "claim_key": "ckey_geocentric",
+      "claim_text": "The Sun does not orbit the Earth.",
+      "verdict": "refuted",
+      "verification_level": "verified",
+      "verification_confidence": 0.99,
+      "sources": [{ "url": "https://nasa.gov/heliocentric", "title": "NASA", "supporting_span": "The Earth orbits the Sun.", "span_offset": null, "excerpt": null }]
+    },
+    {
+      "handle": "cit_2",
+      "uuid": "bbbbbbbb-bbbb-5bbb-8bbb-bbbbbbbbbbbb",
+      "claim_key": "ckey_marsmoons",
+      "claim_text": "Mars has two moons.",
+      "verdict": "supported",
+      "verification_level": "verified",
+      "verification_confidence": 0.95,
+      "sources": [{ "url": "https://nasa.gov/mars", "title": "NASA Mars", "supporting_span": "Phobos and Deimos are the two moons of Mars.", "span_offset": 12, "excerpt": null }]
+    },
+    {
+      "handle": "cit_3",
+      "uuid": "cccccccc-cccc-5ccc-8ccc-cccccccccccc",
+      "claim_key": "ckey_secondary",
+      "claim_text": "Secondary corroborating source.",
+      "verdict": "refuted",
+      "verification_level": "verified",
+      "verification_confidence": 0.7,
+      "sources": [{ "url": "https://example.edu", "title": "Edu", "supporting_span": "Heliocentrism is established.", "span_offset": null, "excerpt": null }]
+    }
+  ],
+  "expected": {
+    "validated_prose": "First <citation ref=\"bbbbbbbb-bbbb-5bbb-8bbb-bbbbbbbbbbbb\" seq=\"1\">moons of Mars</citation>, then a refuted myth <citation ref=\"aaaaaaaa-aaaa-5aaa-8aaa-aaaaaaaaaaaa cccccccc-cccc-5ccc-8ccc-cccccccccccc\" seq=\"2 3\">that the Sun orbits Earth</citation>, and again <citation ref=\"bbbbbbbb-bbbb-5bbb-8bbb-bbbbbbbbbbbb\" seq=\"1\">two moons</citation>.",
+    "references": [
+      {
+        "uuid": "bbbbbbbb-bbbb-5bbb-8bbb-bbbbbbbbbbbb",
+        "seq": 1,
+        "claim_key": "ckey_marsmoons",
+        "claim_text": "Mars has two moons.",
+        "verdict": "supported",
+        "verification_level": "verified",
+        "verification_confidence": 0.95,
+        "sources": [{ "url": "https://nasa.gov/mars", "title": "NASA Mars", "supporting_span": "Phobos and Deimos are the two moons of Mars.", "span_offset": 12, "excerpt": null }]
+      },
+      {
+        "uuid": "aaaaaaaa-aaaa-5aaa-8aaa-aaaaaaaaaaaa",
+        "seq": 2,
+        "claim_key": "ckey_geocentric",
+        "claim_text": "The Sun does not orbit the Earth.",
+        "verdict": "refuted",
+        "verification_level": "verified",
+        "verification_confidence": 0.99,
+        "sources": [{ "url": "https://nasa.gov/heliocentric", "title": "NASA", "supporting_span": "The Earth orbits the Sun.", "span_offset": null, "excerpt": null }]
+      },
+      {
+        "uuid": "cccccccc-cccc-5ccc-8ccc-cccccccccccc",
+        "seq": 3,
+        "claim_key": "ckey_secondary",
+        "claim_text": "Secondary corroborating source.",
+        "verdict": "refuted",
+        "verification_level": "verified",
+        "verification_confidence": 0.7,
+        "sources": [{ "url": "https://example.edu", "title": "Edu", "supporting_span": "Heliocentrism is established.", "span_offset": null, "excerpt": null }]
+      }
+    ],
+    "stats": { "tags_found": 3, "tags_validated": 3, "refs_dropped": 0, "references_built": 3 }
+  }
+}

@@ -85,6 +85,13 @@ export default function Navigation() {
           )}
 
           <a
+            href="/memory"
+            style={actionButtonStyle}
+          >
+            Memory
+          </a>
+
+          <a
             href="https://arcusx.ai/schedule-consult.html"
             className="nav-cta"
             style={actionButtonStyle}

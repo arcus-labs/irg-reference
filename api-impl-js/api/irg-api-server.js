@@ -13,14 +13,16 @@ const fs = require('fs');
 const yaml = require('js-yaml');
 const { createLLMClient, describeEnabledProviders } = require('../core/llm');
 const { runLinearGraph } = require('../core/execution/irg-interpreter-linear');
-const { irgGraphLinear } = require('../graphs/irg-graph-linear');
+const { irgGraphExternalFacts } = require('../graphs/irg-graph-external-facts');
 const { irgGraphLinearSimple } = require('../graphs/irg-graph-linear-simple');
-const { factCheckPipelineGraphLinear } = require('../graphs/fact-check-pipeline-graph-linear');
+const { factCheckPipelineGraph } = require('../graphs/fact-check-pipeline-graph');
+const { startScheduledSweep, DEFAULT_INTERVAL_MS, sweepExpired } = require('../core/external-fact-check/sweeper');
+const factStoreDb = require('../core/external-fact-check/db');
 
 // Available reasoning graphs — selected by `graph` request parameter
 const availableGraphs = {
   'irg-simple': irgGraphLinearSimple,
-  'irg-full': irgGraphLinear,
+  'irg-external-facts': irgGraphExternalFacts,
 };
 const nodeRegistry = require('../core/execution/irg-node-registry');
 const { formatTrace } = require('../core/tracing/trace-formatter');
@@ -150,12 +152,69 @@ app.get('/providers', (req, res) => {
 });
 
 /**
+ * Fact-store stats endpoint.
+ *
+ * Returns aggregate counts and per-domain breakdowns for the claim and
+ * citation stores. Returns `{ stats: null }` if the store has never been
+ * written to (no JSON files yet). Throws 500 (with a FactStoreError
+ * message) if DuckDB itself fails — the trace-navigator uses this to
+ * surface a clean error state in its Memory tab.
+ */
+app.get('/fact-store/stats', async (req, res) => {
+  try {
+    const stats = await factStoreDb.getStats();
+    res.json({ stats });
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] ❌ /fact-store/stats:`, err.message);
+    res.status(500).json({
+      error: 'fact_store_stats_failed',
+      message: err.message,
+    });
+  }
+});
+
+/**
+ * Fact-store sweep endpoint.
+ *
+ * Triggers an on-demand sweep of expired citation artifacts. Accepts
+ * `?dry_run=1` to report what would be removed without touching disk.
+ *
+ * NOTE: no authentication on this endpoint — same trust model as the
+ * rest of the API server. Operators exposing this publicly must put
+ * authn + rate limits in front. See SECURITY.md.
+ */
+app.post('/fact-store/sweep', async (req, res) => {
+  try {
+    const dryRun = req.query.dry_run === '1' || req.query.dry_run === 'true';
+    const result = await sweepExpired({ dryRun });
+    res.json({ result });
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] ❌ /fact-store/sweep:`, err.message);
+    res.status(500).json({
+      error: 'fact_store_sweep_failed',
+      message: err.message,
+    });
+  }
+});
+
+/**
  * Main IRG Processing Endpoint
  *
  * POST /webhook/irg-process
  */
 app.post('/webhook/irg-process', async (req, res) => {
   try {
+    // Select the reasoning graph FIRST so we can derive the pipeline
+    // flag from it. The flag and the graph used to be independently
+    // controllable — but in practice the only valid combinations are
+    // (irg-simple, pipeline=false) and (irg-external-facts, pipeline=true).
+    // Any other combo gave misleading trace output (e.g. claim
+    // artifacts marked as "pipeline" when no pipeline ran). The graph
+    // is now the source of truth.
+    const graphName = availableGraphs[req.body?.graph] ? req.body.graph : 'irg-simple';
+    const selectedGraph = availableGraphs[graphName];
+    const isPipelineGraph = graphName === 'irg-external-facts';
+
     const requestParams = {
       query: req.body?.query || '',
       context: req.body?.context || irgApiRequestDefaults.context,
@@ -166,7 +225,10 @@ app.post('/webhook/irg-process', async (req, res) => {
       enableFactCheck: req.body?.enableFactCheck !== false,
       enableImpactPrediction: req.body?.enableImpactPrediction !== false,
       enableAssessor: req.body?.enableAssessor !== false,
-      enableFactCheckPipeline: req.body?.enableFactCheckPipeline === true,
+      // Tied to graph choice — see comment above. The request body's
+      // enableFactCheckPipeline is ignored. Callers control behavior
+      // via `graph` only.
+      enableFactCheckPipeline: isPipelineGraph,
     };
 
     const {
@@ -207,10 +269,6 @@ app.post('/webhook/irg-process', async (req, res) => {
     });
 
     const registryWrapper = buildRegistryWrapper();
-
-    // Select the reasoning graph
-    const graphName = req.body?.graph || 'irg-simple';
-    const selectedGraph = availableGraphs[graphName] || availableGraphs['irg-simple'];
 
     // Execute the graph
     const queryPreview = typeof query === 'string' ? query.substring(0, 50) : String(query).substring(0, 50);
@@ -280,7 +338,7 @@ app.post('/webhook/fact-check-process', async (req, res) => {
 
     const registryWrapper = buildRegistryWrapper();
     const result = await runLinearGraph(
-      factCheckPipelineGraphLinear,
+      factCheckPipelineGraph,
       initialState,
       llmClient,
       prompts,
@@ -304,6 +362,18 @@ app.listen(PORT, () => {
     ? enabledProviders.map((p) => p.name).join(', ')
     : '(none — set at least one API_KEY_*)';
 
+  // Schedule background sweeps of expired fact-store citations.
+  // Override with FACT_STORE_SWEEP_INTERVAL_MS (set to 0 to disable
+  // the periodic timer; a one-shot sweep still runs at startup).
+  const sweepIntervalMs = Number.isFinite(Number(process.env.FACT_STORE_SWEEP_INTERVAL_MS))
+    ? Number(process.env.FACT_STORE_SWEEP_INTERVAL_MS)
+    : DEFAULT_INTERVAL_MS;
+  startScheduledSweep({ intervalMs: sweepIntervalMs });
+
+  const sweepLabel = sweepIntervalMs > 0
+    ? `every ${Math.round(sweepIntervalMs / 1000 / 60)} min`
+    : 'startup only';
+
   console.log(`\n╔════════════════════════════════════════════════════════╗`);
   console.log(`║     IRG API Server                                     ║`);
   console.log(`╠════════════════════════════════════════════════════════╣`);
@@ -311,8 +381,11 @@ app.listen(PORT, () => {
   console.log(`║ Endpoint: POST /webhook/irg-process`);
   console.log(`║ Endpoint: POST /webhook/fact-check-process`);
   console.log(`║ Endpoint: GET  /providers`);
+  console.log(`║ Endpoint: GET  /fact-store/stats`);
+  console.log(`║ Endpoint: POST /fact-store/sweep [?dry_run=1]`);
   console.log(`║ Health:   GET  /health`);
   console.log(`║ LLM providers: ${providerSummary}`);
+  console.log(`║ Fact-store sweep: ${sweepLabel}`);
   console.log(`╚════════════════════════════════════════════════════════╝\n`);
 });
 

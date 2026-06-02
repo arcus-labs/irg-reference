@@ -54,6 +54,11 @@ class OpenAICompatibleClient {
     const temperature = opts.temperature ?? 0.7;
     const maxTokens = opts.maxTokens ?? 8192;
     const jsonSchema = opts.jsonSchema;
+    // Determinism control. OpenAI-spec providers (Groq, OpenAI, OpenRouter,
+    // many others) accept `seed` and `top_p`. Forwarding them lets a caller
+    // pin output bit-identically across runs at a fixed model snapshot.
+    const seed = opts.seed;
+    const topP = opts.topP;
 
     const requestBody = {
       model: this.model,
@@ -61,6 +66,8 @@ class OpenAICompatibleClient {
       temperature,
       max_tokens: maxTokens,
     };
+    if (Number.isFinite(seed)) requestBody.seed = seed;
+    if (Number.isFinite(topP)) requestBody.top_p = topP;
 
     if (jsonSchema) {
       requestBody.response_format = {

@@ -11,7 +11,7 @@ const os = require('os');
 const path = require('path');
 const { parseYamlOnly } = require('../core/parsing/yaml-format-utils');
 const { runLinearGraph } = require('../core/execution/irg-interpreter-linear');
-const { irgGraphLinear } = require('../graphs/irg-graph-linear');
+const { irgGraphExternalFacts: irgGraphLinear } = require('../graphs/irg-graph-external-facts');
 const nodeRegistry = require('../core/execution/irg-node-registry');
 
 // Mock LLM client
@@ -180,7 +180,11 @@ async function runTest() {
     console.log(`  External fact checks: ${result.externalFactCheckResult?.claims?.length || 0}`);
 
     const nodeTypes = (result.nodes || []).map((node) => node.type);
-    const factCheckIndex = nodeTypes.indexOf('fact_check');
+    // The fact-check node records 'fact_check_pipeline' when the external
+    // pipeline is enabled (as in this test), else 'fact_check'.
+    const factCheckIndex = nodeTypes.indexOf('fact_check') >= 0
+      ? nodeTypes.indexOf('fact_check')
+      : nodeTypes.indexOf('fact_check_pipeline');
     const externalFactCheckIndex = nodeTypes.indexOf('external_fact_check');
     const citationSourceGenerationIndex = nodeTypes.indexOf('citation_source_generation');
     const citationWriteIndex = nodeTypes.indexOf('citation_write');
@@ -236,8 +240,11 @@ async function runTest() {
       throw new Error('Expected persisted claim artifact to contain exactly one claim');
     }
 
-    if (result.factCheckResult.critical_claims !== undefined) {
-      throw new Error('Expected graph state factCheckResult to store artifact metadata instead of raw claims');
+    // factCheckResult now carries BOTH artifact metadata (artifact_path) AND
+    // the inline claims, so downstream nodes (memoryRecall) can read claims
+    // without re-reading the artifact from disk.
+    if (!Array.isArray(result.factCheckResult.critical_claims) || result.factCheckResult.critical_claims.length !== 1) {
+      throw new Error('Expected graph state factCheckResult to carry the inline critical_claims array');
     }
 
     if (!fs.existsSync(path.join(tempRoot, 'metadata', 'fact_check_log.jsonl'))) {

@@ -5,6 +5,10 @@ const fs = require('fs');
 const path = require('path');
 const { getFactStorePaths } = require('./config');
 const { canonicalizeClaim, normalizeWhitespace } = require('./claim-parser');
+const { deriveClaimUuid } = require('../citations/citation-id');
+const db = require('./db');
+const { getEmbeddings } = require('../llm/embeddings');
+const { classifyDomains } = require('./domain-classifier');
 
 function monthBucket(timestamp) {
   return String(timestamp || new Date().toISOString()).slice(0, 7);
@@ -41,6 +45,14 @@ function normalizeFactCheckClaims(criticalClaims, defaults = {}) {
         claim_index: Number.isFinite(claim?.claim_index) ? claim.claim_index : index,
         original_query: normalizeWhitespace(claim?.original_query || defaults.originalQuery || ''),
         context: claim?.context ?? defaults.context ?? null,
+        // Preserve embedding when caller pre-attached one (the async
+        // wrapper does this); sync callers leave it undefined and the
+        // persisted record gets `embedding: null`.
+        embedding: claim?.embedding ?? null,
+        // Same for the embedding-based classifier output (item #12).
+        // Sync callers leave inferred_domain null and only the legacy
+        // hand-tuned `structured_claim.domain` is populated.
+        inferred_domain: claim?.inferred_domain ?? null,
       };
     })
     .filter((claim) => claim.claim);
@@ -59,7 +71,22 @@ function buildPersistedClaim(claim, index) {
     reasoning: claim.reasoning || '',
     source: claim.source ?? null,
     claim_key: structuredClaim.claim_key,
+    // Durable citation handle (Citation_Application.md §2). Derived
+    // deterministically from claim_key so the same claim always maps to the
+    // same uuid across sessions and polyglot ports.
+    uuid: deriveClaimUuid(structuredClaim.claim_key),
     structured_claim: structuredClaim,
+    // Inline embedding for semantic recall (item #11). Older claim
+    // artifacts without this field continue to load via union_by_name
+    // in the DuckDB view; they just won't participate in semantic
+    // neighbor search until they're re-extracted.
+    embedding: claim.embedding ?? null,
+    // Inline classifier output (item #12). Coexists with
+    // `structured_claim.domain` (the hand-tuned classifier whose
+    // output is part of the claim_key hash). Use `inferred_domain.domain`
+    // for display / analytics; use `structured_claim.domain` for
+    // anything that needs to round-trip with the claim_key.
+    inferred_domain: claim.inferred_domain ?? null,
   };
 }
 
@@ -133,6 +160,124 @@ function writeFactCheckClaimsArtifactSync({ criticalClaims, summary, confidence,
   };
 }
 
+/**
+ * Async, dedup-aware variant of `writeFactCheckClaimsArtifactSync`.
+ *
+ * Before writing, queries the DuckDB-backed fact-store to see whether
+ * every claim_key in the batch already has a fresh on-disk entry. If
+ * so, the write is skipped and a synthetic "write_skipped" record is
+ * returned that downstream consumers can still process via the inline
+ * `critical_claims` field.
+ *
+ * Mixed batches (some fresh, some new) are written normally; the
+ * returned record carries a `deduplicated_count` so callers can
+ * surface how many claims were already known.
+ *
+ * Why skip-entire-batch rather than filter-and-write? See the design
+ * note in the dedup PR — keeping all claims in the artifact lets the
+ * downstream external pipeline see exactly what the LLM extracted,
+ * not a confusing subset.
+ */
+async function writeFactCheckClaimsArtifact(params) {
+  const {
+    criticalClaims,
+    summary,
+    confidence,
+    originalQuery,
+    context,
+    iteration,
+    sourceNode,
+  } = params;
+
+  const normalizedClaims = normalizeFactCheckClaims(criticalClaims, { originalQuery, context });
+  if (normalizedClaims.length === 0) return null;
+
+  // Compute claim_keys for the dedup query. The writer below also
+  // canonicalizes; we accept the duplicate work because canonicalization
+  // is cheap (string ops + sha256) and the alternative (passing
+  // pre-canonicalized claims through) ripples through the public API.
+  const claimKeys = normalizedClaims.map((claim) =>
+    canonicalizeClaim(claim.claim, {}, { originalQuery, context }).claim_key
+  );
+
+  let freshKeys;
+  try {
+    freshKeys = await db.findFreshClaimKeys(claimKeys);
+  } catch (err) {
+    // Dedup is an optimization, not a correctness requirement. If the
+    // query layer is unavailable, fall back to always-write.
+    console.warn('[claim-store] dedup check failed, falling back to always-write:', err.message);
+    freshKeys = new Set();
+  }
+
+  if (freshKeys.size === claimKeys.length) {
+    // Every claim already on disk and not expired — skip the write.
+    return {
+      artifact_type: 'fact_check_claims',
+      storage: 'filesystem_artifact_skipped',
+      generated_at: new Date().toISOString(),
+      source_node: sourceNode || 'factCheck',
+      iteration: iteration || 0,
+      critical_claim_count: normalizedClaims.length,
+      deduplicated_count: normalizedClaims.length,
+      write_skipped: true,
+      summary: summary || '',
+      confidence: Number(confidence ?? 0.5),
+      // Inline claims so callers that read from this object directly
+      // (rather than from disk) still get the data.
+      critical_claims: normalizedClaims.map((claim, i) => ({
+        ...claim,
+        claim_key: claimKeys[i],
+      })),
+    };
+  }
+
+  // At least one claim is new — generate embeddings (item #11) AND
+  // classify domains via the embedding-based classifier (item #12)
+  // for the batch. Both are best-effort: the embeddings module falls
+  // back internally if a provider fails, and the classifier delegates
+  // to the legacy hand-tuned scorer when only the hash embedder is
+  // available. We still wrap in try/catch so an unforeseen explosion
+  // never blocks claim persistence.
+  const claimTexts = normalizedClaims.map((c) => c.claim);
+
+  let embeddings = [];
+  try {
+    embeddings = await getEmbeddings(claimTexts);
+  } catch (err) {
+    console.warn('[claim-store] embedding generation failed (claims will persist without embeddings):', err.message);
+    embeddings = new Array(normalizedClaims.length).fill(null);
+  }
+
+  let inferredDomains = [];
+  try {
+    inferredDomains = await classifyDomains(claimTexts);
+  } catch (err) {
+    console.warn('[claim-store] domain classification failed (claims will persist without inferred_domain):', err.message);
+    inferredDomains = new Array(normalizedClaims.length).fill(null);
+  }
+
+  // Re-emit the batch with embeddings + inferred_domain inlined so the
+  // sync writer (and the normalizer it calls) propagates them into
+  // the artifact.
+  const claimsWithMetadata = normalizedClaims.map((c, i) => ({
+    ...c,
+    embedding: embeddings[i] || null,
+    inferred_domain: inferredDomains[i] || null,
+  }));
+
+  const result = writeFactCheckClaimsArtifactSync({
+    ...params,
+    criticalClaims: claimsWithMetadata,
+  });
+  return {
+    ...result,
+    deduplicated_count: freshKeys.size,
+    embeddings_attached: embeddings.filter((e) => e && Array.isArray(e.vector)).length,
+    inferred_domains_attached: inferredDomains.filter((d) => d && typeof d.domain === 'string').length,
+  };
+}
+
 function resolveArtifactPath(factCheckResult) {
   const artifactPath = typeof factCheckResult === 'string'
     ? factCheckResult
@@ -184,6 +329,38 @@ function ensureFactCheckClaimsArtifactSync({ factCheckResult, originalQuery, con
   });
 }
 
+/**
+ * Async variant of `ensureFactCheckClaimsArtifactSync` that uses the
+ * dedup-aware writer. Generates embeddings + inferred_domain when
+ * writing new artifacts, so claims coming in via the standalone
+ * fact-check endpoint participate in semantic recall and the
+ * classifier features (items #11 + #12).
+ *
+ * Returns the existing factCheckResult unchanged if it already has
+ * `artifact_path` (no write needed).
+ */
+async function ensureFactCheckClaimsArtifact({ factCheckResult, originalQuery, context, iteration, sourceNode, rawOutput }) {
+  if (factCheckResult?.artifact_path) {
+    return factCheckResult;
+  }
+
+  const criticalClaims = normalizeFactCheckClaims(factCheckResult?.critical_claims, { originalQuery, context });
+  if (!criticalClaims.length) {
+    return factCheckResult || {};
+  }
+
+  return writeFactCheckClaimsArtifact({
+    criticalClaims,
+    summary: factCheckResult?.summary || '',
+    confidence: factCheckResult?.confidence ?? 0.5,
+    originalQuery,
+    context,
+    iteration,
+    sourceNode,
+    rawOutput,
+  });
+}
+
 function getFactCheckClaimsSync(factCheckResult) {
   const artifact = readFactCheckClaimsArtifactSync(factCheckResult);
   if (Array.isArray(artifact?.critical_claims)) {
@@ -213,8 +390,10 @@ function buildFactCheckPromptResultSync(factCheckResult) {
 
 module.exports = {
   normalizeFactCheckClaims,
+  writeFactCheckClaimsArtifact,
   writeFactCheckClaimsArtifactSync,
   readFactCheckClaimsArtifactSync,
+  ensureFactCheckClaimsArtifact,
   ensureFactCheckClaimsArtifactSync,
   getFactCheckClaimsSync,
   buildFactCheckPromptResultSync,

@@ -26,8 +26,15 @@ If you deploy this anywhere reachable from outside your machine, **you** are res
 - Trace files written to `trace-navigator/traces/` contain the original user query verbatim. If your queries are sensitive, treat the trace store as sensitive data.
 
 ### Filesystem write paths
-- The fact-check pipeline writes JSON artifacts under `_fact-store/`. Filenames are derived from claim hashes, so untrusted user input does not directly become a path component, but the directory grows unbounded — set up rotation or pruning if you run continuously.
+- The fact-check pipeline writes JSON artifacts under `_fact-store/`. Filenames are derived from claim hashes, so untrusted user input does not directly become a path component, but the directory grows unbounded — set up rotation or pruning if you run continuously. The CLI `npm run fact-store -- prune` and the scheduled sweep handle expired citations automatically.
+- The citation fetcher writes HTTP responses to `_fact-store/sources/html/` and extracted markdown to `_fact-store/sources/markdown/`. Filenames are SHA-256 hashes of source URLs (no user-controlled path components).
 - Trace files write to `trace-navigator/traces/` named by ISO timestamp. Same caveat: prune periodically.
+
+### Outbound HTTP (citation fetcher)
+- The `citationFetch` node makes HTTP requests to URLs that the LLM suggested as candidate sources. These URLs are operator-trusted at best — they're whatever the model produced based on the user's question.
+- **The fetcher does NOT honor robots.txt.** Operators running this against arbitrary public URLs at scale should add a robots-respecting policy layer before deploying publicly. For reference / research use, the existing defaults (10s timeout, 5 MB cap, 5-redirect limit, identifying User-Agent) are sufficient.
+- **Bandwidth.** Each external-facts run can fetch up to ~3 URLs per critical claim. A run with 10 claims and 5 MB caps can pull 150 MB of HTTP traffic. Make sure your egress budget is sized for it.
+- **SSRF risk.** The fetcher does not block private IP ranges, localhost, or cloud metadata endpoints (e.g. `169.254.169.254`). If you deploy this on infrastructure that has access to internal services, an attacker can ask a question whose "candidate sources" target those internal endpoints. Either run the fetcher in a sandboxed network namespace, or add a deny-list at the fetcher entry point.
 
 ### Prompt injection
 - This is a reasoning system. User input flows into LLM prompts by design.

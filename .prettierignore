@@ -1,0 +1,25 @@
+# Dependencies & build output
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+dist/
+build/
+out/
+**/dist/
+**/build/
+
+# Lockfiles & minified assets (formatter would fight the generators)
+package-lock.json
+**/package-lock.json
+*.min.css
+*.min.js
+
+# Other-language ports (Prettier doesn't own these)
+api-impl-py/
+api-impl-rs/
+
+# Generated / fixture data and stores
+_fact-store/
+**/data/
+trace-navigator/public/

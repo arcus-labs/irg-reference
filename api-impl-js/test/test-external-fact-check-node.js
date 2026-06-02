@@ -40,10 +40,20 @@ async function runTest() {
       verdict: 'supported',
       created_at: '2026-03-01T00:00:00.000Z',
       expires_at: '2099-03-01T00:00:00.000Z',
-      source: {
-        title: 'Example Mars Reference',
-        url: 'https://example.com/mars',
-      },
+      // Production citations always carry these fields (citationWrite/Verify
+      // set them). The DuckDB citations view references them, so fixtures must
+      // include them or read_json_auto's column binding fails on a sparse store.
+      verification_level: 'verified',
+      verification_status: 'verified_supported',
+      retrieval_mode: 'fetched_unverified',
+      retrieval_deferred: false,
+      confidence: 0.9,
+      sources: [
+        {
+          title: 'Example Mars Reference',
+          url: 'https://example.com/mars',
+        },
+      ],
     };
 
     const provisionalCitation = {
@@ -64,6 +74,7 @@ async function runTest() {
       verification_level: 'provisional',
       verification_status: 'suggested_sources_unverified',
       retrieval_mode: 'llm_generated_source_candidates',
+      retrieval_deferred: true,
       context: {
         pipeline_stage: 'source_generation_only',
       },
@@ -110,19 +121,22 @@ async function runTest() {
     };
 
     const prepared = externalFactCheckNode.prepare(initialState);
-    const artifactPath = path.join(tempRoot, prepared.factCheckResult.artifact_path);
+
+    // The claims artifact is persisted during the async llmCall (the
+    // dedup/embedding/classifier-aware writer), NOT in the sync prepare().
+    // Drive the full node lifecycle, then assert on the written artifact.
+    const externalResult = await externalFactCheckNode.llmCall(prepared);
+    const processed = externalFactCheckNode.process(prepared, externalResult);
+
+    const artifactPath = path.join(tempRoot, processed.factCheckResult.artifact_path);
     const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
 
-    assert.ok(prepared.factCheckResult.artifact_path);
+    assert.ok(processed.factCheckResult.artifact_path);
     assert.ok(fs.existsSync(artifactPath));
-    assert.equal(prepared.factCheckResult.critical_claims, undefined);
     assert.equal(artifact.critical_claim_count, 3);
     assert.equal(artifact.critical_claims[0].structured_claim.claim_kind, 'factual_assertion');
     assert.equal(typeof artifact.critical_claims[0].structured_claim.domain_confidence, 'number');
     assert.ok(fs.existsSync(path.join(tempRoot, 'metadata', 'fact_check_log.jsonl')));
-
-    const externalResult = await externalFactCheckNode.llmCall(prepared);
-    const processed = externalFactCheckNode.process(prepared, externalResult);
 
     assert.equal(processed.externalFactCheckResult.summary.total_claims, 3);
     assert.equal(processed.externalFactCheckResult.summary.cache_hits, 1);
@@ -147,7 +161,7 @@ async function runTest() {
     assert.equal(miss.cache_hit, false);
     assert.equal(hit.structured_claim.domain, 'science');
     assert.equal(typeof hit.structured_claim.domain_confidence, 'number');
-    assert.equal(processed.factCheckResult.artifact_path, prepared.factCheckResult.artifact_path);
+    assert.ok(typeof processed.factCheckResult.artifact_path === 'string' && processed.factCheckResult.artifact_path.length > 0);
     assert.ok(processed.nodes.some((node) => node.type === 'external_fact_check'));
 
     console.log('✓ external fact check node verified/provisional/miss behavior validated');

@@ -1,0 +1,25 @@
+{
+  "scenarios": [
+    {
+      "id": "unauthorized-charge",
+      "title": "Unauthorized charge / error resolution",
+      "cfr": ["12 CFR 1005.2(m)", "12 CFR 1005.6", "12 CFR 1005.11"],
+      "query": "I just saw a $240 charge on my Northwind account that I never made — it looks like someone used my card. I noticed it today. Am I on the hook for the $240, and what happens now?",
+      "context": "Consumer support conversation. The customer is reporting a possible unauthorized debit-card transaction on a consumer account."
+    },
+    {
+      "id": "stop-recurring-payment",
+      "title": "Stop a recurring / preauthorized payment",
+      "cfr": ["12 CFR 1005.10(c)"],
+      "query": "There's a $39 gym membership that gets pulled out of my account automatically every month and I want it to stop. The next one is scheduled in about a week. How do I make sure it doesn't go through?",
+      "context": "Consumer support conversation about stopping a preauthorized (recurring) electronic fund transfer."
+    },
+    {
+      "id": "remittance-cancel",
+      "title": "Remittance (international) cancel / didn't arrive",
+      "cfr": ["12 CFR 1005.34", "12 CFR 1005.33"],
+      "query": "I sent $300 to my mom in another country about 10 minutes ago and I think I used the wrong account number. Can I cancel it and get my money back?",
+      "context": "Consumer support conversation about an international remittance transfer the sender wants to cancel."
+    }
+  ]
+}

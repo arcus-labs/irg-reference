@@ -24,6 +24,7 @@
     "react-markdown": "^10.1.0",
     "react-vertical-timeline-component": "^3.5.3",
     "rehype-raw": "^7.0.0",
+    "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
     "yaml": "^2.8.2"
   },

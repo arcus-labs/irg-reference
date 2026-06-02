@@ -159,9 +159,11 @@ async function executeNode(node, state, llmClient, prompts) {
     llmResult = await node.llmCall(prepared, llmClient);
   }
 
-  // Pass the full llmResult to the node's process function
-  // The node will handle extracting content and tokens
-  const newState = node.process(prepared, llmResult);
+  // Pass the full llmResult to the node's process function.
+  // `process` may be sync or async — awaiting a non-promise is a no-op,
+  // so this works for both. Async process() is required by nodes that
+  // need to query the fact-store (e.g. fact-check for dedup).
+  const newState = await node.process(prepared, llmResult);
 
   return newState;
 }

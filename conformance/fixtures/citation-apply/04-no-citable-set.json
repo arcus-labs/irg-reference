@@ -1,0 +1,10 @@
+{
+  "name": "no citable set strips any emitted tags",
+  "draft_with_tags": "It is known that <citation ref=\"cit_1\">the sky is blue</citation> on clear days.",
+  "citable_set": [],
+  "expected": {
+    "validated_prose": "It is known that the sky is blue on clear days.",
+    "references": [],
+    "stats": { "tags_found": 0, "tags_validated": 0, "refs_dropped": 0, "references_built": 0 }
+  }
+}

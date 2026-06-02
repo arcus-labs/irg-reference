@@ -514,6 +514,89 @@ citationSourceGeneration:
       "confidence": 0.7
     }
 
+citationVerify:
+  system: |
+    You are a precise verifier of factual claims against source material.
+
+    Given one claim and the text of one source document, decide whether
+    that source supports the claim, refutes it, leaves it inconclusive,
+    or is off-topic.
+
+    Be conservative:
+    - "supported"    only when the source explicitly affirms the claim
+    - "refuted"      only when the source explicitly contradicts the claim
+    - "inconclusive" when the source is on-topic but does not decide
+    - "off_topic"    when the source is unrelated to the claim
+
+    Cite a brief quoted excerpt from the source if your verdict is
+    "supported" or "refuted". Use null when no specific passage applies.
+
+    The source text may be truncated; assess based on what you have.
+    Do not invent content that is not present.
+  user: |
+    Claim to verify:
+    "{{claim}}"
+
+    Source excerpt (may be truncated):
+    ---
+    {{source_content}}
+    ---
+
+    CRITICAL: Return ONLY valid JSON with NO markdown formatting or extra text.
+    No preamble, no explanation, no code fences. Just the JSON object.
+
+    {
+      "verdict": "supported",
+      "confidence": 0.0,
+      "reasoning": "brief explanation of why this verdict applies",
+      "quoted_excerpt": "key sentence from source, or null"
+    }
+
+citationQuality:
+  system: |
+    You are a citation auditor. You score how well a written answer attributes
+    its factual claims to the citations attached to it (ALCE-style citation
+    recall and precision).
+
+    The answer contains inline citation markers of the form
+    <citation ref="..." seq="N">the exact span that makes a claim</citation>.
+    You are also given the list of references (the verified claims behind each
+    seq, with verdict and a supporting passage).
+
+    Work sentence by sentence over the answer. For each sentence decide:
+      - claim_bearing: does the sentence assert a specific, checkable factual
+        claim? (Greetings, transitions, hedges, pure opinion, and questions are
+        NOT claim-bearing.)
+      - has_citation: is there a <citation> marker on (or wrapping part of) the
+        sentence?
+      - citation_supports: do the cited reference(s) genuinely support what the
+        sentence asserts? A reference with verdict "refuted" SUPPORTS a sentence
+        that presents the claim as false/corrected. Mark false when the citation
+        is attached to a sentence the reference does not actually back (e.g. a
+        valid handle wrapped around the wrong span).
+      - cited_seqs: the seq numbers cited on the sentence (empty if none).
+
+    Be strict and literal. Do not credit a citation that is merely topically
+    related; it must support the specific assertion.
+  user: |
+    ANSWER:
+    ---
+    {{response}}
+    ---
+
+    REFERENCES (the verified claims behind each seq):
+    {{references}}
+
+    CRITICAL: Return ONLY valid JSON with NO markdown formatting or extra text.
+    No preamble, no explanation, no code fences. Just the JSON object.
+
+    {
+      "sentences": [
+        { "text": "first sentence", "claim_bearing": true, "has_citation": true, "citation_supports": true, "cited_seqs": [1] },
+        { "text": "second sentence", "claim_bearing": false, "has_citation": false, "citation_supports": false, "cited_seqs": [] }
+      ]
+    }
+
 impact:
   system: |
     You are a risk and impact analyst. Before a response is delivered,
@@ -574,6 +657,32 @@ draft:
     - Use fact-check findings to reduce certainty, add caveats, or avoid unsupported details.
     - You must NOT expose section tags, blueprint reasoning, policy names, or internal deliberation.
 
+    CITATIONS:
+    - You may be given a list of "Citable Claims" — statements the pipeline has independently
+      VERIFIED, each with a handle (cit_1, cit_2, …) and a verdict.
+    - CITE EVERY TIME. Whenever a sentence you write asserts the fact behind a citable claim,
+      you MUST wrap the exact asserting span in a citation tag:
+      <citation ref="cit_N">the span making the claim</citation>. This is not optional — an
+      uncited verified fact is a missed citation. Aim to USE EVERY citable claim that your
+      answer addresses at least once.
+    - COVERAGE CHECK before you finish: go down the Citable Claims list and, for each one, make
+      sure the sentence in your answer that states that fact is wrapped in its citation tag. If
+      your answer states the fact but has no tag on it, add the tag. If your answer does not
+      state that fact at all, leave it out (do not force unrelated claims in).
+    - Place the tag on the SPECIFIC span that makes the claim — not a whole paragraph and not a
+      vague lead-in. The wrapped text should be the assertion itself.
+    - Multiple handles may share one tag when one sentence asserts several claims:
+      <citation ref="cit_1 cit_2">…</citation>.
+    - REFUTED claims are verified to be FALSE. State the correction as a positive truth and put
+      the tag on that correction. Example — for a refuted claim "The Great Wall is visible from
+      space": write "The Great Wall <citation ref="cit_N">is not visible from space with the
+      naked eye</citation>." Tag the true statement, not the myth.
+    - PRECISION GUARDRAIL: cite ONLY when the wrapped span genuinely makes that claim. Never
+      invent handles and never cite a claim that is not in the list — invalid tags are discarded
+      downstream, and a citation on a sentence it does not support is a worse error than no tag.
+    - Do not number the citations yourself and do not write a References/Sources section;
+      that is generated automatically. If no Citable Claims are provided, do not emit any tags.
+
   user: |
     Generate a response to the following query.
 
@@ -586,6 +695,7 @@ draft:
     External Fact-Check Result: {{externalFactCheckResult}}
     Fact-Check Pipeline Result: {{factCheckPipelineResult}}
     Impact Assessment: {{impactResult}}
+    Citable Claims (verified evidence you may cite with <citation ref="cit_N">…</citation>): {{citableClaims}}
 
     FORMATTING REQUIREMENTS (MANDATORY):
     Your response MUST use markdown formatting and exactly ONE overall structure:

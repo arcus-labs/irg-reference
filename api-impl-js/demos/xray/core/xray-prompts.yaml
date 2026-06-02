@@ -1,0 +1,286 @@
+# X-Ray IRG Prompt Set — v1
+#
+# LLM prompt templates for the X-ray decision-support IRG pipeline.
+# Template variables use {{variable}} syntax.
+# Objects are rendered as JSON when referenced.
+
+clinicalContext:
+  system: |
+    You are a radiology clinical assistant. Your job is to capture and
+    disambiguate the clinical question BEFORE any imaging interpretation.
+    Be thorough, structured, and concise. Never speculate on diagnoses.
+  user: |
+    Analyze the following clinical question and prepare for X-ray interpretation.
+
+    Clinical Question: "{{clinicalQuestion}}"
+    Patient Age: {{patientAge}}
+    Symptoms: {{patientSymptoms}}
+    History: {{patientHistory}}
+    Imaging Modality: {{imagingModality}}
+    Body Region: {{bodyRegion}}
+
+    CRITICAL: Return ONLY valid JSON with NO markdown formatting or extra text.
+
+    {
+      "structured_question": "precise restatement of the clinical question",
+      "assumptions": ["assumption 1 (e.g., no prior films available)"],
+      "missing_info": ["missing info 1 (e.g., laterality not specified)"],
+      "can_proceed": true,
+      "confidence": 0.8,
+      "reasoning": "brief explanation"
+    }
+
+imageObservation:
+  system: |
+    You are a radiographic observation engine. Extract FINDINGS ONLY — never
+    diagnoses. Describe what you see in structured, anatomical terms.
+    Use a systematic approach: airway, breathing, circulation, disability,
+    everything else (ABCDE) for chest; or region-specific systematic review.
+  user: |
+    Extract radiographic findings from the following X-ray study.
+
+    Clinical Question: "{{structuredQuestion}}"
+    Assumptions: {{assumptions}}
+    Body Region: {{bodyRegion}}
+    Modality: {{imagingModality}}
+    Image Descriptions / Findings: {{imageDescriptions}}
+
+    Perform a SYSTEMATIC REVIEW. For each anatomical region, describe what
+    is observed. Do NOT provide diagnoses — only observations.
+
+    CRITICAL: Return ONLY valid JSON with NO markdown formatting or extra text.
+
+    {
+      "findings": [
+        {"region": "lungs", "observation": "...", "laterality": "bilateral|left|right|N/A"},
+        {"region": "heart", "observation": "...", "laterality": "N/A"}
+      ],
+      "systematic_review": {
+        "airway": "...",
+        "mediastinum": "...",
+        "heart": "...",
+        "lungs": "...",
+        "pleura": "...",
+        "bones": "...",
+        "soft_tissues": "..."
+      },
+      "image_quality": "diagnostic|suboptimal|poor|non_diagnostic",
+      "image_quality_reasons": ["reason if not diagnostic"],
+      "observation_confidence": 0.7
+    }
+
+hypothesis:
+  system: |
+    You are a diagnostic reasoning engine. Given clinical context and
+    radiographic findings, generate an initial set of diagnostic hypotheses.
+    Each hypothesis must be explicitly linked to supporting and conflicting findings.
+    Do NOT rank by likelihood alone — include important "must not miss" diagnoses.
+  user: |
+    Generate diagnostic hypotheses for the following case.
+
+    Clinical Question: "{{structuredQuestion}}"
+    Assumptions: {{assumptions}}
+    Findings: {{findings}}
+    Patient Age: {{patientAge}}
+    Symptoms: {{patientSymptoms}}
+    History: {{patientHistory}}
+
+    CRITICAL: Return ONLY valid JSON with NO markdown formatting or extra text.
+
+    {
+      "hypotheses": [
+        {
+          "label": "Pneumonia",
+          "supporting_findings": ["finding that supports this"],
+          "conflicting_findings": ["finding that argues against"],
+          "confidence": 0.6,
+          "status": "active",
+          "reasoning": "why this hypothesis is considered"
+        }
+      ]
+    }
+
+differentialExpansion:
+  system: |
+    You are a radiology knowledge engine. Expand the differential diagnosis
+    by considering additional entities, adjusting confidence based on
+    clinical guidelines, and flagging discriminating features.
+  user: |
+    Expand the differential diagnosis for the following case.
+
+    Clinical Question: "{{structuredQuestion}}"
+    Current Hypotheses: {{hypotheses}}
+    Findings: {{findings}}
+    Patient Age: {{patientAge}}
+    Symptoms: {{patientSymptoms}}
+    History: {{patientHistory}}
+
+    Tasks:
+    1. Add any missing diagnoses (especially "must not miss" entities).
+    2. Adjust confidence of existing hypotheses based on clinical knowledge.
+    3. Identify discriminating features that would help narrow the differential.
+    4. Flag missing evidence needed to resolve the differential.
+
+    CRITICAL: Return ONLY valid JSON with NO markdown formatting or extra text.
+
+    {
+      "new_hypotheses": [
+        {
+          "label": "Atelectasis",
+          "supporting_findings": [],
+          "conflicting_findings": [],
+          "confidence": 0.3,
+          "reasoning": "why added"
+        }
+      ],
+      "confidence_adjustments": [
+        {"label": "Pneumonia", "new_confidence": 0.65, "reason": "..."}
+      ],
+      "discriminating_features": ["air bronchograms", "silhouette sign"],
+      "missing_evidence": ["lateral view", "prior comparison films"]
+    }
+
+adversary:
+  system: |
+    You are a rigorous adversarial critic specializing in radiology.
+    Challenge the leading hypotheses, expose blind spots, and ensure
+    dangerous diagnoses are not being overlooked.
+  user: |
+    Challenge the following hypothesis set.
+
+    Clinical Question: "{{structuredQuestion}}"
+    Ranked Hypotheses: {{rankedHypotheses}}
+    Findings: {{findings}}
+    Missing Evidence: {{missingEvidence}}
+    Patient Age: {{patientAge}}
+    Symptoms: {{patientSymptoms}}
+
+    For the top hypothesis:
+    1. What alternative explanations exist for the key findings?
+    2. What specific evidence would DISPROVE this hypothesis?
+    3. Are there overlooked diagnoses or red flags?
+    4. What targeted re-examination questions should be asked?
+
+    CRITICAL: Return ONLY valid JSON with NO markdown formatting or extra text.
+
+    {
+      "alternative_explanations": [
+        {"finding": "...", "alternative": "..."}
+      ],
+      "disproval_checklist": ["check for X", "look for Y"],
+      "overlooked_hypotheses": ["diagnosis that may have been missed"],
+      "red_flags": ["urgent finding that needs immediate attention"],
+      "targeted_questions": ["Is there air bronchogram in the left lower lobe?"],
+      "confidence": 0.7
+    }
+
+targetedReanalysis:
+  system: |
+    You are a focused radiographic observation engine. Re-examine the image
+    for SPECIFIC features only. Answer each targeted question with a finding,
+    presence (true/false/uncertain), and local confidence.
+  user: |
+    Re-examine the image for the following specific features.
+
+    Targeted Questions: {{targetedQuestions}}
+    Previous Findings: {{findings}}
+    Hypotheses Under Review: {{hypotheses}}
+    Image Descriptions: {{imageDescriptions}}
+    Body Region: {{bodyRegion}}
+
+    For EACH question, provide a focused finding.
+
+    CRITICAL: Return ONLY valid JSON with NO markdown formatting or extra text.
+
+    {
+      "focused_findings": [
+        {
+          "question": "Is there air bronchogram in the left lower lobe?",
+          "finding": "Air bronchograms are present in the left lower lobe",
+          "present": true,
+          "confidence": 0.8,
+          "triggered_by": ["hyp_0_0"]
+        }
+      ]
+    }
+
+
+
+evidenceLink:
+  system: |
+    You are an evidence-binding engine. Link findings to hypotheses,
+    determining which findings support, weaken, or invalidate each hypothesis.
+    Update confidence accordingly.
+  user: |
+    Bind evidence to hypotheses for the following case.
+
+    Current Hypotheses: {{hypotheses}}
+    Original Findings: {{findings}}
+    Targeted Findings: {{targetedFindings}}
+    Adversary Analysis: {{adversaryResult}}
+
+    For EACH hypothesis, determine:
+    1. Which findings SUPPORT it (increase confidence)?
+    2. Which findings WEAKEN it (decrease confidence)?
+    3. Which findings INVALIDATE it (rule it out)?
+    4. What is the new confidence after incorporating all evidence?
+
+    CRITICAL: Return ONLY valid JSON with NO markdown formatting or extra text.
+
+    {
+      "evidence_links": [
+        {
+          "hypothesis": "Pneumonia",
+          "supports": ["consolidation in left lower lobe", "air bronchograms present"],
+          "weakens": ["no fever reported"],
+          "invalidates": [],
+          "new_confidence": 0.75,
+          "reasoning": "why confidence changed"
+        }
+      ]
+    }
+
+triage:
+  system: |
+    You are a clinical decision-support engine. Convert the final hypothesis
+    set into ranked, action-oriented guidance. This is ASSISTIVE output —
+    never authoritative. Always surface uncertainty and recommend next steps.
+  user: |
+    Generate decision-support output for the following case.
+
+    Clinical Question: "{{structuredQuestion}}"
+    Ranked Hypotheses: {{rankedHypotheses}}
+    All Findings: {{findings}}
+    Targeted Findings: {{targetedFindings}}
+    Convergence State: {{convergenceDecision}} — {{convergenceReason}}
+    Adversary Analysis: {{adversaryResult}}
+    Patient Age: {{patientAge}}
+    Symptoms: {{patientSymptoms}}
+
+    Produce:
+    1. Ranked differential with confidence and key evidence.
+    2. Recommended next steps (imaging, labs, clinical correlation).
+    3. Urgency level (emergent | urgent | routine).
+    4. Clinical correlation note.
+
+    CRITICAL: Return ONLY valid JSON with NO markdown formatting or extra text.
+
+    {
+      "ranked_differential": [
+        {
+          "label": "Pneumonia",
+          "confidence": 0.75,
+          "key_supporting": ["consolidation", "air bronchograms"],
+          "key_contradicting": ["afebrile"],
+          "reasoning": "most likely given findings"
+        }
+      ],
+      "recommended_next_steps": [
+        "Clinical correlation with CBC, CRP",
+        "Consider lateral chest X-ray",
+        "Follow-up imaging in 6 weeks if treated"
+      ],
+      "urgency": "routine",
+      "clinical_correlation": "Findings suggestive but clinical correlation required.",
+      "confidence": 0.7
+    }

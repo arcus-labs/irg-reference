@@ -1,0 +1,109 @@
+{
+  "version": "0.1",
+  "description": "Citation-quality benchmark eval set (ALCE-style). Each case supplies a query plus the GROUND-TRUTH verified claims (with supporting spans) that a good answer should assert and cite. The harness seeds these as verified citations, lets a real model draft + cite, then scores citation recall (did claim-bearing sentences get cited?) and precision (do citations actually support their sentence?).",
+  "cases": [
+    {
+      "id": "antibiotics-viruses",
+      "domain": "health",
+      "query": "Will antibiotics help cure my common cold? I keep hearing they don't work on viruses.",
+      "context": "",
+      "verified_claims": [
+        {
+          "claim_text": "Antibiotics do not treat viral infections.",
+          "verdict": "supported",
+          "sources": [{ "url": "https://www.who.int/news-room/fact-sheets/detail/antibiotic-resistance", "title": "WHO — Antibiotic resistance", "supporting_span": "Antibiotics are used to prevent and treat bacterial infections; they do not work against viral infections such as colds and flu." }]
+        },
+        {
+          "claim_text": "The common cold is caused by viruses, not bacteria.",
+          "verdict": "supported",
+          "sources": [{ "url": "https://www.cdc.gov/common-cold", "title": "CDC — Common Cold", "supporting_span": "Most colds are caused by rhinoviruses; the common cold is a viral infection of the upper respiratory tract." }]
+        },
+        {
+          "claim_text": "Misusing antibiotics for viral infections contributes to antibiotic resistance.",
+          "verdict": "supported",
+          "sources": [{ "url": "https://www.cdc.gov/antibiotic-use", "title": "CDC — Antibiotic Use", "supporting_span": "Taking antibiotics when they are not needed accelerates the development of antibiotic resistance." }]
+        }
+      ]
+    },
+    {
+      "id": "vaccines-autism",
+      "domain": "health",
+      "query": "Is there a link between childhood vaccines and autism?",
+      "context": "",
+      "verified_claims": [
+        {
+          "claim_text": "Vaccines do not cause autism.",
+          "verdict": "supported",
+          "sources": [{ "url": "https://www.cdc.gov/vaccinesafety/concerns/autism.html", "title": "CDC — Vaccines and Autism", "supporting_span": "Studies have shown that there is no link between receiving vaccines and developing autism spectrum disorder." }]
+        },
+        {
+          "claim_text": "The 1998 study claiming a vaccine-autism link was retracted for fraud.",
+          "verdict": "supported",
+          "sources": [{ "url": "https://www.bmj.com/content/342/bmj.c7452", "title": "BMJ — Wakefield's article an elaborate fraud", "supporting_span": "The Lancet paper has been retracted; the journal found the research to be fraudulent." }]
+        }
+      ]
+    },
+    {
+      "id": "great-wall-space",
+      "domain": "geography",
+      "query": "Can you really see the Great Wall of China from space with the naked eye?",
+      "context": "",
+      "verified_claims": [
+        {
+          "claim_text": "The Great Wall of China is visible from space with the naked eye.",
+          "verdict": "refuted",
+          "sources": [{ "url": "https://www.nasa.gov/vision/space/workinginspace/great_wall.html", "title": "NASA — Great Wall", "supporting_span": "The Great Wall is generally not visible to the unaided eye from low Earth orbit; the claim that it is the only human structure visible from space is a myth." }]
+        }
+      ]
+    },
+    {
+      "id": "pluto-planet",
+      "domain": "astronomy",
+      "query": "Is Pluto still classified as a planet?",
+      "context": "",
+      "verified_claims": [
+        {
+          "claim_text": "Pluto is a planet.",
+          "verdict": "refuted",
+          "sources": [{ "url": "https://www.iau.org/news/pressreleases/detail/iau0603/", "title": "IAU — Pluto reclassification", "supporting_span": "In 2006 the IAU defined a new category, 'dwarf planet', and reclassified Pluto as a dwarf planet rather than a planet." }]
+        },
+        {
+          "claim_text": "A planet must clear the neighborhood around its orbit under the IAU definition.",
+          "verdict": "supported",
+          "sources": [{ "url": "https://www.iau.org/news/pressreleases/detail/iau0603/", "title": "IAU — Planet definition", "supporting_span": "A planet is a celestial body that orbits the Sun, is round due to its own gravity, and has cleared the neighbourhood around its orbit." }]
+        }
+      ]
+    },
+    {
+      "id": "water-boiling",
+      "domain": "science",
+      "query": "Does water always boil at 100 degrees Celsius?",
+      "context": "",
+      "verified_claims": [
+        {
+          "claim_text": "Water boils at 100 degrees Celsius at standard atmospheric pressure.",
+          "verdict": "supported",
+          "sources": [{ "url": "https://www.nist.gov/water-boiling-point", "title": "NIST — Boiling point", "supporting_span": "At one standard atmosphere (101.325 kPa) the boiling point of water is 100 degrees Celsius." }]
+        },
+        {
+          "claim_text": "Water boils at a lower temperature at higher altitude due to reduced pressure.",
+          "verdict": "supported",
+          "sources": [{ "url": "https://www.usgs.gov/boiling-altitude", "title": "USGS — Boiling and altitude", "supporting_span": "Because atmospheric pressure decreases with altitude, water boils at temperatures below 100 degrees Celsius at high elevation." }]
+        }
+      ]
+    },
+    {
+      "id": "goldfish-memory",
+      "domain": "science",
+      "query": "Is it true that goldfish only have a three-second memory?",
+      "context": "",
+      "verified_claims": [
+        {
+          "claim_text": "Goldfish have only a three-second memory.",
+          "verdict": "refuted",
+          "sources": [{ "url": "https://www.scientificamerican.com/goldfish-memory", "title": "Scientific American — Goldfish memory", "supporting_span": "Research shows goldfish can remember things for weeks or months; the 'three-second memory' is a myth." }]
+        }
+      ]
+    }
+  ]
+}

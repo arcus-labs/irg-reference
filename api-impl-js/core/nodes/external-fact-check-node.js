@@ -6,7 +6,7 @@ const { getFactStorePaths } = require('../external-fact-check/config');
 const { canonicalizeClaim } = require('../external-fact-check/claim-parser');
 const { lookupCachedCitation } = require('../external-fact-check/cache-lookup');
 const {
-  ensureFactCheckClaimsArtifactSync,
+  ensureFactCheckClaimsArtifact,
   getFactCheckClaimsSync,
 } = require('../external-fact-check/claim-store');
 
@@ -149,29 +149,37 @@ const externalFactCheckNode = {
   type: 'external_fact_check',
 
   prepare(state) {
-    const factCheckResult = ensureFactCheckClaimsArtifactSync({
+    // The artifact write happens in `llmCall` (which is async). We
+    // can't call the async writer here because `prepare` is sync per
+    // the interpreter's contract.
+    return {
+      ...state,
+      currentPhase: 'externalFactCheck',
+    };
+  },
+
+  async llmCall(state) {
+    // Persist via the async (dedup + embedding + classifier aware)
+    // writer. This ensures claims arriving via the standalone
+    // fact-check endpoint participate in semantic recall, not just
+    // the irg-external-facts pipeline path.
+    const factCheckResult = await ensureFactCheckClaimsArtifact({
       factCheckResult: state.factCheckResult,
       originalQuery: state.originalQuery,
       context: state.context,
       iteration: state.iteration || 0,
       sourceNode: 'externalFactCheck',
     });
-
-    return {
-      ...state,
-      factCheckResult,
-      externalFactCheckInput: {
-        claims: getFactCheckClaimsSync(factCheckResult),
-      },
-      currentPhase: 'externalFactCheck',
-    };
+    const claims = getFactCheckClaimsSync(factCheckResult);
+    const evaluation = await evaluateClaims(claims);
+    // Tuck the updated factCheckResult into the response so process()
+    // can stash it back on state.
+    return { evaluation, factCheckResult };
   },
 
-  async llmCall(state) {
-    return evaluateClaims(state.externalFactCheckInput?.claims || []);
-  },
-
-  process(state, externalResult) {
+  process(state, llmResult) {
+    const externalResult = llmResult?.evaluation;
+    const updatedFactCheckResult = llmResult?.factCheckResult || state.factCheckResult;
     const result = externalResult && typeof externalResult === 'object'
       ? externalResult
       : {
@@ -198,7 +206,7 @@ const externalFactCheckNode = {
     };
 
     return recordNode(
-      { ...state, externalFactCheckResult: result },
+      { ...state, factCheckResult: updatedFactCheckResult, externalFactCheckResult: result },
       node,
       'externalFactCheck'
     );

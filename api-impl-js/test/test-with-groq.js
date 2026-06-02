@@ -12,7 +12,7 @@ const envPath = path.resolve(__dirname, '../../.env');
 require('dotenv').config({ path: envPath });
 
 const { runLinearGraph } = require('../core/execution/irg-interpreter-linear');
-const { irgGraphLinear } = require('../graphs/irg-graph-linear');
+const { irgGraphExternalFacts: irgGraphLinear } = require('../graphs/irg-graph-external-facts');
 const nodeRegistry = require('../core/execution/irg-node-registry');
 const yaml = require('js-yaml');
 const fs = require('fs');

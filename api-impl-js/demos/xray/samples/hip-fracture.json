@@ -1,0 +1,13 @@
+{
+  "id": "hip-fracture",
+  "label": "Suspected hip fracture (post-fall)",
+  "description": "78 y/o · mechanical fall · right hip pain, non-weight-bearing",
+  "fields": {
+    "clinicalQuestion": "Evaluate the right hip for fracture following a fall.",
+    "patientAge": "78",
+    "patientSymptoms": "Right hip pain, unable to bear weight after a ground-level fall",
+    "patientHistory": "Osteoporosis; long-term bisphosphonate therapy. No prior hip surgery.",
+    "bodyRegion": "extremity"
+  },
+  "image": "hip-x-ray.jpg"
+}

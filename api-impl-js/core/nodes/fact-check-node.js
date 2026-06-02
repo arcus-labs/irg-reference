@@ -15,7 +15,7 @@
 const { buildPrompt, safeParseJson, extractTokens, recordNode } = require('./node-utils');
 const {
   normalizeFactCheckClaims,
-  writeFactCheckClaimsArtifactSync,
+  writeFactCheckClaimsArtifact,
 } = require('../external-fact-check/claim-store');
 
 const factCheckNode = {
@@ -35,7 +35,7 @@ const factCheckNode = {
     return llmClient.call(state.factCheckPrompt, { node: 'factCheck' });
   },
 
-  process(state, llmResponse) {
+  async process(state, llmResponse) {
     // Extract content and tokens from response
     const content = typeof llmResponse === 'object' ? llmResponse.content : llmResponse;
     const tokens = extractTokens(llmResponse);
@@ -58,38 +58,70 @@ const factCheckNode = {
     const normalizedClaims = normalizeFactCheckClaims(result.critical_claims || []);
     const confidence = Number(result.confidence ?? 0.5);
 
-    // The node type signals the rendering mode:
-    //   - 'fact_check_pipeline' — claims are persisted to disk for downstream
-    //     pipeline nodes (externalFactCheck, citationSourceGeneration, etc.)
-    //   - 'fact_check'          — claims are returned inline only, no persistence
+    // Always persist claims to the fact-store, regardless of pipeline mode.
+    // This lets the memory layer accrue even when only the simple graph
+    // runs. The artifact write is a side-effect; downstream behavior is
+    // controlled by which fields we expose on the trace node, not by
+    // whether the disk write happens.
+    //
+    // We persist defensively — if disk writes fail (read-only FS, full
+    // disk, etc.), the in-memory pipeline still completes and the trace
+    // is generated. Memory accrual is best-effort.
+    let persistedArtifact = null;
+    if (normalizedClaims.length > 0) {
+      try {
+        persistedArtifact = await writeFactCheckClaimsArtifact({
+          criticalClaims: normalizedClaims,
+          summary: result.summary || '',
+          confidence,
+          originalQuery: state.originalQuery,
+          context: state.context,
+          iteration: state.iteration || 0,
+          sourceNode: 'factCheck',
+          rawOutput: cleanedResponse,
+        });
+      } catch (err) {
+        console.warn('[fact-check-node] claim persistence failed (non-fatal):', err.message);
+      }
+    }
+
+    // The node type signals the rendering mode in the trace navigator:
+    //   - 'fact_check_pipeline' — the downstream external pipeline will
+    //     rehydrate claims from the artifact; expose artifact metadata.
+    //   - 'fact_check'          — simple-mode display: inline claims +
+    //     confidence + summary, no artifact metadata in the trace.
+    //   In both modes the artifact is on disk; only the trace shape
+    //   differs.
     const isPipelineMode = !!state.config?.enableFactCheckPipeline;
     const nodeType = isPipelineMode ? 'fact_check_pipeline' : 'fact_check';
 
-    let factCheckOutput;
-    if (isPipelineMode) {
-      factCheckOutput = writeFactCheckClaimsArtifactSync({
-        criticalClaims: normalizedClaims,
-        summary: result.summary || '',
-        confidence,
-        originalQuery: state.originalQuery,
-        context: state.context,
-        iteration: state.iteration || 0,
-        sourceNode: 'factCheck',
-        rawOutput: cleanedResponse,
-      });
-    } else {
-      factCheckOutput = {
+    // Two distinct shapes:
+    //   - traceContent: what the trace navigator renders. Clean for
+    //     simple mode (inline claims, no artifact metadata), full
+    //     artifact metadata for pipeline mode.
+    //   - stateValue:   what downstream nodes consume. Carries BOTH
+    //     the artifact metadata (artifact_path, fact_store_root —
+    //     used by external-fact-check to rehydrate from disk) AND
+    //     the inline critical_claims (used by memory-recall and any
+    //     other node that wants the claims without a disk read).
+    //     If write was skipped (all dups) or persistence failed, we
+    //     fall back to just the inline shape.
+    const traceContent = (isPipelineMode && persistedArtifact)
+      ? persistedArtifact
+      : {
         critical_claims: normalizedClaims,
         summary: result.summary || '',
         confidence,
       };
-    }
+    const stateValue = persistedArtifact
+      ? { ...persistedArtifact, critical_claims: normalizedClaims }
+      : traceContent;
 
     const node = {
       id: `node_fact_check_${state.iteration || 0}`,
       type: nodeType,
       goal: 'Extract critical factual claims',
-      content: factCheckOutput,
+      content: traceContent,
       raw_output: cleanedResponse,
       status: 'completed',
       confidence,
@@ -106,7 +138,7 @@ const factCheckNode = {
     };
 
     return recordNode(
-      { ...state, factCheckResult: factCheckOutput, total_tokens_used: newTokens },
+      { ...state, factCheckResult: stateValue, total_tokens_used: newTokens },
       node, 'factCheck'
     );
   },

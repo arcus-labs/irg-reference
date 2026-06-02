@@ -158,11 +158,15 @@ function extractTokens(response) {
   // If response is an object with usage data
   if (typeof response === 'object' && response.usage) {
     const usage = response.usage;
+    // Support both naming conventions: input_tokens/output_tokens and prompt_tokens/completion_tokens
+    const input = usage.input_tokens || usage.prompt_tokens || 0;
+    const output = usage.output_tokens || usage.completion_tokens || 0;
     return {
-      // Support both naming conventions: input_tokens/output_tokens and prompt_tokens/completion_tokens
-      input_tokens: usage.input_tokens || usage.prompt_tokens || 0,
-      output_tokens: usage.output_tokens || usage.completion_tokens || 0,
-      total_tokens: usage.total_tokens || 0,
+      input_tokens: input,
+      output_tokens: output,
+      // Providers that report prompt/completion but omit a total would otherwise
+      // record total_tokens: 0 — fall back to input+output to stay consistent.
+      total_tokens: usage.total_tokens || (input + output),
     };
   }
 

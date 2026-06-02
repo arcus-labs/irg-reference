@@ -1,0 +1,13 @@
+{
+  "name": "irg-reference",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Polyglot IRG (Iterative Reasoning Graph) reference. Root tooling only.",
+  "scripts": {
+    "format": "prettier --write .",
+    "lint": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2"
+  }
+}

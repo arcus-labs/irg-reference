@@ -1,0 +1,21 @@
+{
+  "name": "hallucinated handle is stripped, text kept",
+  "draft_with_tags": "The study showed <citation ref=\"cit_7\">a 40% improvement</citation> in outcomes.",
+  "citable_set": [
+    {
+      "handle": "cit_1",
+      "uuid": "22222222-2222-5222-8222-222222222222",
+      "claim_key": "ckey_real",
+      "claim_text": "A real verified claim.",
+      "verdict": "supported",
+      "verification_level": "verified",
+      "verification_confidence": 0.8,
+      "sources": []
+    }
+  ],
+  "expected": {
+    "validated_prose": "The study showed a 40% improvement in outcomes.",
+    "references": [],
+    "stats": { "tags_found": 1, "tags_validated": 0, "refs_dropped": 1, "references_built": 0 }
+  }
+}

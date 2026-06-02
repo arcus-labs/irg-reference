@@ -1,0 +1,354 @@
+/* X-ray IRG styles — scoped under .xray-app to avoid bleed into trace-navigator. Generated from xray-irg app.css. */
+
+.xray-app {
+  --border: var(--rule);
+  --node-clinical:#656260; --node-observation:#0f776d; --node-quality:#6b81af;
+  --node-hypothesis:#6b2b67; --node-differential:#472d64; --node-adversary:#6d0000;
+  --node-reanalysis:#0d3954; --node-evidence:#3f6459; --node-convergence:#5270cb;
+  --node-triage:#615846; --node-termination:#656260; --node-record:#656260;
+}
+
+/* Dark-mode node colors — mirror the lighter tints the regular trace
+   navigator switches to (globals.css :root[data-theme='dark']), so the
+   X-ray timeline icons match in both themes. Higher specificity than the
+   :root[data-theme='dark'] block ensures these win. */
+:root[data-theme='dark'] .xray-app {
+  --node-clinical:#8c8579; --node-observation:#54b7aa; --node-quality:#88a2d8;
+  --node-hypothesis:#9c61b0; --node-differential:#9e83d1; --node-adversary:#b85b5b;
+  --node-reanalysis:#5ea0d6; --node-evidence:#68b39a; --node-convergence:#7ea0ff;
+  --node-triage:#a39174; --node-termination:#8c8579; --node-record:#8c8579;
+}
+
+.xray-app nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  padding: 1.2rem 3rem;
+  display: flex; justify-content: space-between; align-items: center;
+  /* theme-aware: trace-navigator defines --nav-surface for light + dark */
+  background: var(--nav-surface);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--rule);
+}
+
+.xray-app .nav-mark {
+  font-family: var(--sans); font-weight: 600; font-size: 1.1rem;
+  letter-spacing: 0.04em; color: var(--ink); text-decoration: none;
+}
+
+.xray-app .nav-mark span { color: var(--accent); }
+
+.xray-app .nav-links { display: flex; gap: 2.5rem; align-items: center; }
+
+.xray-app .nav-links a {
+  font-family: var(--sans); font-size: 0.82rem; font-weight: 400;
+  color: var(--stone); text-decoration: none; letter-spacing: 0.03em; transition: color 0.2s;
+}
+
+.xray-app .nav-links a:hover { color: var(--ink); }
+
+.xray-app .nav-links a.nav-cta {
+  color: var(--accent); font-weight: 500; padding: 0.45rem 1.2rem;
+  border: 1px solid var(--accent); border-radius: 2px; transition: all 0.2s;
+}
+
+.xray-app .nav-links a.nav-cta:hover { background: var(--accent); color: var(--paper); }
+
+.xray-app footer {
+  padding: 2rem 3rem; border-top: 1px solid var(--rule);
+  display: flex; justify-content: space-between; align-items: center;
+  max-width: 1200px; margin: 0 auto; width: 100%;
+}
+
+.xray-app .footer-mark { font-family: var(--sans); font-size: 0.82rem; font-weight: 500; color: var(--stone); }
+
+.xray-app main { padding-top: 70px; flex: 1; max-width: 1200px; margin: 0 auto; width: 100%; padding-left: 3rem; padding-right: 3rem; }
+
+.xray-app .upload-section {
+  padding: 3rem 0 2rem;
+}
+
+.xray-app .upload-section h1 {
+  font-family: var(--serif); font-size: 2rem; font-weight: 400; margin-bottom: 0.5rem;
+}
+
+.xray-app .upload-section h1 em { font-style: italic; color: var(--accent); }
+
+.xray-app .upload-section > p { font-size: 0.95rem; color: var(--stone); margin-bottom: 2rem; }
+
+.xray-app .upload-form {
+  background: var(--paper-warm); border-radius: 4px; padding: 2.5rem;
+}
+
+.xray-app .field { margin-bottom: 1.5rem; }
+
+.xray-app .field label {
+  display: block; font-family: var(--sans); font-size: 0.78rem;
+  font-weight: 500; color: var(--stone); margin-bottom: 0.45rem; letter-spacing: 0.02em;
+}
+
+.xray-app .field label .req { color: var(--accent); margin-left: 2px; }
+
+.xray-app .field input, .xray-app .field select, .xray-app .field textarea {
+  width: 100%; font-family: var(--sans); font-size: 0.88rem; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--rule); border-radius: 2px;
+  padding: 0.7rem 0.9rem; transition: border-color 0.2s, box-shadow 0.2s; outline: none;
+}
+
+.xray-app .field input:focus, .xray-app .field select:focus, .xray-app .field textarea:focus {
+  border-color: var(--accent); box-shadow: 0 0 0 3px rgba(26, 74, 58, 0.08);
+}
+
+.xray-app .field textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
+
+.xray-app .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+.xray-app .dropzone {
+  border: 2px dashed var(--rule); border-radius: 4px; padding: 2.5rem;
+  text-align: center; cursor: pointer; transition: all 0.2s; background: var(--paper);
+}
+
+.xray-app .dropzone:hover, .xray-app .dropzone.active { border-color: var(--accent); background: rgba(26, 74, 58, 0.03); }
+
+.xray-app .dropzone-icon { font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5; }
+
+.xray-app .dropzone-text { font-family: var(--sans); font-size: 0.85rem; color: var(--stone); }
+
+.xray-app .dropzone-text strong { color: var(--accent); }
+
+.xray-app .dropzone-preview { margin-top: 1rem; }
+
+.xray-app .dropzone-preview img { max-height: 120px; border-radius: 3px; opacity: 0.8; }
+
+.xray-app .dropzone-previews { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-top: 0.5rem; }
+
+.xray-app .dropzone-preview-item { position: relative; }
+
+.xray-app .dropzone-preview-item img { height: 90px; border-radius: 3px; opacity: 0.85; display: block; }
+
+.xray-app .dropzone-remove {
+  position: absolute; top: -6px; right: -6px; width: 18px; height: 18px;
+  border-radius: 50%; border: none; background: var(--accent); color: var(--paper);
+  font-size: 12px; line-height: 18px; text-align: center; cursor: pointer; padding: 0;
+}
+
+.xray-app .dropzone-view-label {
+  display: block; text-align: center; font-family: var(--mono); font-size: 0.6rem;
+  color: var(--stone-light); margin-top: 0.25rem;
+}
+
+.xray-app .dropzone-add-more {
+  width: 60px; height: 60px; border: 1px dashed var(--border); border-radius: 3px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  font-size: 1.5rem; color: var(--stone-light); transition: border-color 0.2s;
+}
+
+.xray-app .dropzone-add-more:hover { border-color: var(--accent); color: var(--accent); }
+
+.xray-app .submit-btn {
+  width: 100%; font-family: var(--sans); font-size: 0.88rem; font-weight: 500;
+  color: var(--paper); background: var(--accent); border: none; border-radius: 2px;
+  padding: 0.85rem 2rem; cursor: pointer; transition: background 0.2s, transform 0.1s; margin-top: 0.5rem;
+}
+
+.xray-app .submit-btn:hover { background: var(--accent-hover); }
+
+.xray-app .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.xray-app .case-list-section { padding: 2rem 0 4rem; }
+
+.xray-app .section-label {
+  font-family: var(--mono); font-size: 0.7rem; font-weight: 400; color: var(--stone);
+  letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 1.5rem;
+}
+
+.xray-app .case-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+
+.xray-app .case-card {
+  background: var(--paper-warm); border-radius: 4px; overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; text-decoration: none; color: inherit;
+  display: block;
+}
+
+.xray-app .case-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(10,10,10,0.08); }
+
+.xray-app .case-card-image {
+  width: 100%; height: 180px; object-fit: cover; background: var(--rule); display: block;
+}
+
+.xray-app .case-card-body { padding: 1.2rem; }
+
+.xray-app .case-card-body h3 {
+  font-family: var(--serif); font-size: 1.05rem; font-weight: 500; margin-bottom: 0.3rem;
+  line-height: 1.3;
+}
+
+.xray-app .case-card-meta {
+  font-family: var(--mono); font-size: 0.68rem; color: var(--stone-light); letter-spacing: 0.04em;
+}
+
+.xray-app .case-card-status {
+  display: inline-block; font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.06em;
+  text-transform: uppercase; padding: 0.2rem 0.6rem; border-radius: 2px; margin-top: 0.5rem;
+}
+
+.xray-app .case-card-status.converged { background: rgba(26,74,58,0.1); color: var(--accent); }
+
+.xray-app .case-card-status.processing { background: rgba(82,112,203,0.1); color: #5270cb; }
+
+.xray-app .case-card-status.error { background: rgba(109,0,0,0.1); color: #6d0000; }
+
+.xray-app .empty-state {
+  text-align: center; padding: 4rem 2rem; color: var(--stone);
+}
+
+.xray-app .empty-state-icon { font-size: 3rem; opacity: 0.3; margin-bottom: 1rem; }
+
+.xray-app .empty-state p { font-family: var(--sans); font-size: 0.9rem; }
+
+.xray-app .detail-back {
+  font-family: var(--mono); font-size: 0.72rem; color: var(--stone-light);
+  text-decoration: none; letter-spacing: 0.04em; display: inline-block;
+  margin-bottom: 1.5rem; padding-top: 1.5rem; transition: color 0.2s;
+}
+
+.xray-app .detail-back:hover { color: var(--accent); }
+
+.xray-app .detail-header { margin-bottom: 2rem; }
+
+.xray-app .detail-header h1 { font-family: var(--serif); font-size: 1.8rem; font-weight: 400; margin-bottom: 0.5rem; }
+
+.xray-app .detail-header-meta {
+  font-family: var(--mono); font-size: 0.72rem; color: var(--stone); display: flex; gap: 1.5rem; flex-wrap: wrap;
+}
+
+.xray-app .detail-disclaimer {
+  background: rgba(109,0,0,0.05); border-left: 3px solid #6d0000; padding: 1rem 1.5rem;
+  margin-bottom: 2rem; border-radius: 0 3px 3px 0;
+}
+
+.xray-app .detail-disclaimer p {
+  font-family: var(--sans); font-size: 0.82rem; color: var(--stone); line-height: 1.6;
+}
+
+.xray-app .detail-split {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 3rem;
+}
+
+.xray-app .detail-image-panel { position: sticky; top: 90px; align-self: start; display: flex; flex-direction: column; gap: 1rem; }
+
+.xray-app .detail-image-wrapper { }
+
+.xray-app .detail-image-panel img {
+  width: 100%; border-radius: 4px; background: var(--code-bg);
+}
+
+.xray-app .detail-image-label {
+  font-family: var(--mono); font-size: 0.68rem; color: var(--stone-light);
+  text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.5rem;
+}
+
+.xray-app .trace-panel { min-width: 0; }
+
+.xray-app .trace-panel h2 {
+  font-family: var(--serif); font-size: 1.3rem; font-weight: 500; margin-bottom: 1.5rem;
+}
+
+.xray-app .trace-timeline { position: relative; padding-left: 2rem; }
+
+.xray-app .trace-timeline::before {
+  content: ''; position: absolute; left: 8px; top: 0; bottom: 0;
+  width: 2px; background: var(--rule);
+}
+
+.xray-app .trace-node { position: relative; margin-bottom: 1.5rem; }
+
+.xray-app .trace-node-dot {
+  position: absolute; left: -2rem; top: 0.5rem; width: 18px; height: 18px;
+  border-radius: 50%; border: 2px solid var(--paper);
+  box-shadow: 0 0 0 2px var(--stone-light);
+}
+
+.xray-app .trace-node-header {
+  display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem; cursor: pointer;
+}
+
+.xray-app .trace-node-label {
+  font-family: var(--mono); font-size: 0.72rem; font-weight: 500;
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+
+.xray-app .trace-node-time {
+  font-family: var(--mono); font-size: 0.62rem; color: var(--stone-light);
+}
+
+.xray-app .trace-node-body {
+  background: var(--paper-warm); border-radius: 3px; padding: 1.2rem; font-size: 0.88rem;
+  line-height: 1.7; overflow-y: auto; transition: max-height 0.3s ease;
+  max-height: 520px;
+}
+
+.xray-app .trace-node-body.collapsed { max-height: 130px; overflow: hidden; }
+
+.xray-app .trace-node-body pre {
+  font-family: var(--mono); font-size: 0.75rem; white-space: pre-wrap;
+  word-break: break-word; color: var(--stone);
+}
+
+.xray-app .report-section {
+  background: var(--paper-warm); border-radius: 4px; padding: 2rem; margin-bottom: 2rem;
+}
+
+.xray-app .report-section h2 {
+  font-family: var(--serif); font-size: 1.3rem; font-weight: 500;
+  margin-bottom: 1rem; padding-bottom: 0.8rem; border-bottom: 1px solid var(--rule);
+}
+
+.xray-app .report-section h3 {
+  font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+  color: var(--ink); margin-top: 1rem; margin-bottom: 0.4rem;
+}
+
+.xray-app .report-section p {
+  font-size: 0.92rem; line-height: 1.7; color: var(--ink); margin-bottom: 0.5rem;
+}
+
+.xray-app .report-section ul { margin: 0.5rem 0 1rem 1.2rem; }
+
+.xray-app .report-section li {
+  font-size: 0.88rem; line-height: 1.7; color: var(--ink); margin-bottom: 0.3rem;
+}
+
+.xray-app .urgency-badge {
+  display: inline-block; font-family: var(--mono); font-size: 0.65rem; font-weight: 500;
+  letter-spacing: 0.06em; text-transform: uppercase; padding: 0.25rem 0.8rem;
+  border-radius: 2px;
+}
+
+.xray-app .urgency-badge.urgent { background: rgba(109,0,0,0.1); color: #6d0000; }
+
+.xray-app .urgency-badge.routine { background: rgba(26,74,58,0.1); color: var(--accent); }
+
+.xray-app .urgency-badge.emergent { background: rgba(109,0,0,0.2); color: #6d0000; }
+
+.xray-app .spinner {
+  display: inline-block; width: 20px; height: 20px;
+  border: 2px solid var(--paper); border-top-color: transparent;
+  border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 0.5rem;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 768px) {
+  .xray-app nav { padding: 1rem 1.5rem; }
+  .xray-app main { padding-left: 1.5rem; padding-right: 1.5rem; }
+  .xray-app .detail-split { grid-template-columns: 1fr; }
+  .xray-app .field-row { grid-template-columns: 1fr; }
+  .xray-app .case-grid { grid-template-columns: 1fr; }
+
+}
+
+/* Sample-packet quick-load row */
+.xray-app .sample-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 0 0 1.5rem; }
+.xray-app .sample-label { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--stone); margin-right: 0.25rem; }
+.xray-app .sample-chip { font-family: var(--sans); font-size: 0.8rem; color: var(--accent); background: var(--accent-tint); border: 1px solid var(--accent); border-radius: 999px; padding: 0.4rem 0.9rem; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.xray-app .sample-chip:hover:not(:disabled) { background: var(--accent); color: var(--paper); }
+.xray-app .sample-chip:disabled { opacity: 0.5; cursor: not-allowed; }

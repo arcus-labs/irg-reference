@@ -128,6 +128,14 @@ function formatTrace(executionResult, requestParams) {
     draft_response: draftResponse,
     convergence_result: executionResult.convergenceResult || {},
 
+    // Citations (Citation_Application.md). `references` are the resolved
+    // citation records backing the cited answer; `citation_quality` is the
+    // ALCE-style recall/precision scoring (null when nothing was citable).
+    references: executionResult.references
+      || executionResult.citationApplyResult?.references
+      || [],
+    citation_quality: executionResult.citationQualityResult || null,
+
     // Flag for YAML format
     __yaml: shouldBeYaml,
   };

@@ -1,0 +1,38 @@
+{
+  "name": "basic single citation",
+  "draft_with_tags": "Antibiotics are ineffective against viruses, so <citation ref=\"cit_1\">they should not be prescribed for the common cold</citation>.",
+  "citable_set": [
+    {
+      "handle": "cit_1",
+      "uuid": "11111111-1111-5111-8111-111111111111",
+      "claim_key": "ckey_antibiotics",
+      "claim_text": "Antibiotics do not treat viral infections.",
+      "verdict": "supported",
+      "verification_level": "verified",
+      "verification_confidence": 0.92,
+      "sources": [
+        { "url": "https://who.int/antibiotics", "title": "WHO", "supporting_span": "Antibiotics do not work on viruses such as those that cause the common cold.", "span_offset": 1840, "excerpt": null }
+      ],
+      "citation_path": "citations/2026-05/ckey_antibiotics.json"
+    }
+  ],
+  "expected": {
+    "validated_prose": "Antibiotics are ineffective against viruses, so <citation ref=\"11111111-1111-5111-8111-111111111111\" seq=\"1\">they should not be prescribed for the common cold</citation>.",
+    "references": [
+      {
+        "uuid": "11111111-1111-5111-8111-111111111111",
+        "seq": 1,
+        "claim_key": "ckey_antibiotics",
+        "claim_text": "Antibiotics do not treat viral infections.",
+        "verdict": "supported",
+        "verification_level": "verified",
+        "verification_confidence": 0.92,
+        "sources": [
+          { "url": "https://who.int/antibiotics", "title": "WHO", "supporting_span": "Antibiotics do not work on viruses such as those that cause the common cold.", "span_offset": 1840, "excerpt": null }
+        ],
+        "citation_path": "citations/2026-05/ckey_antibiotics.json"
+      }
+    ],
+    "stats": { "tags_found": 1, "tags_validated": 1, "refs_dropped": 0, "references_built": 1 }
+  }
+}

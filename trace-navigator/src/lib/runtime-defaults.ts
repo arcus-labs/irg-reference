@@ -17,5 +17,5 @@ export const traceNavigatorRequestDefaults = {
 
 export const availableGraphOptions = [
   { value: 'irg-simple', label: 'IRG Simple' },
-  { value: 'irg-full', label: 'IRG Full Pipeline' },
+  { value: 'irg-external-facts', label: 'IRG + External Facts' },
 ] as const;

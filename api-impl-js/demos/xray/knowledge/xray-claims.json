@@ -1,0 +1,125 @@
+{
+  "pack": "xray-radiology-v0.1",
+  "corpus": "Radiology decision-support knowledge — ACR Appropriateness Criteria, Fleischner Society pulmonary-nodule guidance, Lung-RADS, ACR Actionable Reporting, and established plain-radiograph signs",
+  "disclaimer": "Curated reference excerpts for demonstration only. NOT a medical device and NOT for clinical use. Guideline thresholds are summarized and may be out of date; verify against the current primary source (ACR, Fleischner Society / Radiology, ACR Lung-RADS) before any clinical application.",
+  "domain": "xray-radiology",
+  "claims": [
+    {
+      "id": "fleischner-solid-lt6-lowrisk",
+      "claim": "Under the Fleischner Society 2017 guidelines, a single solid pulmonary nodule smaller than 6 mm (less than ~100 cubic mm) in a low-risk patient does not require routine follow-up imaging.",
+      "verdict": "supported",
+      "section": "Fleischner Society 2017 — solid nodule < 6 mm, low risk",
+      "url": "https://pubs.rsna.org/doi/10.1148/radiol.2017161659",
+      "supporting_span": "For a single solid noncalcified pulmonary nodule smaller than 6 mm in a low-risk patient, no routine follow-up is recommended.",
+      "topic": "pulmonary nodule; Fleischner; follow-up threshold"
+    },
+    {
+      "id": "fleischner-solid-6to8-lowrisk",
+      "claim": "Under the Fleischner Society 2017 guidelines, a single solid pulmonary nodule of 6–8 mm in a low-risk patient should be re-imaged with CT at 6–12 months, then considered at 18–24 months.",
+      "verdict": "supported",
+      "section": "Fleischner Society 2017 — solid nodule 6–8 mm, low risk",
+      "url": "https://pubs.rsna.org/doi/10.1148/radiol.2017161659",
+      "supporting_span": "For a single solid nodule of 6 to 8 mm in a low-risk patient, CT follow-up at 6 to 12 months is recommended, then at 18 to 24 months.",
+      "topic": "pulmonary nodule; Fleischner; follow-up interval"
+    },
+    {
+      "id": "lungrads-4a-definition",
+      "claim": "In ACR Lung-RADS, a category 4A finding denotes a suspicious lung-screening finding with an estimated malignancy likelihood that warrants additional diagnostic evaluation such as a short-interval (e.g., 3-month) CT, PET/CT, or tissue sampling.",
+      "verdict": "supported",
+      "section": "ACR Lung-RADS — category 4A",
+      "url": "https://www.acr.org/Clinical-Resources/Clinical-Tools-and-Reference/Lung-Rads",
+      "supporting_span": "Lung-RADS category 4A represents findings suspicious for malignancy that require additional diagnostic testing, which may include short-interval follow-up CT, PET/CT, and/or tissue sampling.",
+      "topic": "lung cancer screening; Lung-RADS; management category"
+    },
+    {
+      "id": "acr-ac-acute-respiratory-cxr",
+      "claim": "Under the ACR Appropriateness Criteria for acute respiratory illness, chest radiography is usually appropriate as the initial imaging study in adults with suspected pneumonia and abnormal vital signs or examination findings.",
+      "verdict": "supported",
+      "section": "ACR Appropriateness Criteria — Acute Respiratory Illness",
+      "url": "https://acsearch.acr.org/list",
+      "supporting_span": "Chest radiography is usually appropriate as the initial imaging examination for patients with acute respiratory illness and clinical findings that raise concern for pneumonia.",
+      "topic": "ACR Appropriateness Criteria; chest radiography; pneumonia"
+    },
+    {
+      "id": "sign-silhouette",
+      "claim": "The silhouette sign: loss of a normal anatomic border on a chest radiograph indicates that an opacity is anatomically adjacent to that border, which localizes the abnormality (e.g., loss of the right heart border localizes disease to the right middle lobe; loss of the left heart border to the lingula).",
+      "verdict": "supported",
+      "section": "Plain-radiograph sign — silhouette sign",
+      "url": "https://radiopaedia.org/articles/silhouette-sign",
+      "supporting_span": "The silhouette sign refers to loss of the normal silhouette or border of a structure; an intrathoracic opacity that obscures a border lies in anatomic contact with that border, allowing localization of the lesion.",
+      "topic": "imaging sign; localization; silhouette"
+    },
+    {
+      "id": "sign-air-bronchogram",
+      "claim": "An air bronchogram (air-filled bronchi made visible by surrounding opacified alveoli) indicates an airspace (alveolar) filling process such as pneumonia or pulmonary edema, and argues against a pleural or purely mass-like process.",
+      "verdict": "supported",
+      "section": "Plain-radiograph sign — air bronchogram",
+      "url": "https://radiopaedia.org/articles/air-bronchogram",
+      "supporting_span": "An air bronchogram is a tubular lucency of an air-filled bronchus surrounded by opacified alveoli, indicating an airspace-filling process and excluding a pleural location of the opacity.",
+      "topic": "imaging sign; airspace disease; air bronchogram"
+    },
+    {
+      "id": "sign-deep-sulcus",
+      "claim": "The deep sulcus sign — an abnormally deep, lucent lateral costophrenic angle on a supine chest radiograph — indicates a pneumothorax in a patient who cannot be imaged upright.",
+      "verdict": "supported",
+      "section": "Plain-radiograph sign — deep sulcus sign",
+      "url": "https://radiopaedia.org/articles/deep-sulcus-sign",
+      "supporting_span": "On a supine film, anterior pleural air collects at the lung base and produces an abnormally deep and lucent lateral costophrenic sulcus, indicating pneumothorax.",
+      "topic": "imaging sign; pneumothorax; supine"
+    },
+    {
+      "id": "emergent-pneumoperitoneum",
+      "claim": "Free intraperitoneal air (pneumoperitoneum) seen as lucency beneath the hemidiaphragm on an upright chest radiograph suggests a perforated hollow viscus and is a surgical emergency requiring urgent communication.",
+      "verdict": "supported",
+      "section": "Critical finding — pneumoperitoneum",
+      "url": "https://radiopaedia.org/articles/pneumoperitoneum",
+      "supporting_span": "Free air under the diaphragm on an upright chest radiograph indicates pneumoperitoneum, most commonly from a perforated viscus, and constitutes a surgical emergency.",
+      "topic": "critical finding; pneumoperitoneum; emergent"
+    },
+    {
+      "id": "emergent-widened-mediastinum-trauma",
+      "claim": "A widened mediastinum on a trauma chest radiograph raises concern for traumatic aortic injury and warrants prompt CT angiography of the chest.",
+      "verdict": "supported",
+      "section": "Critical finding — widened mediastinum in trauma",
+      "url": "https://acsearch.acr.org/list",
+      "supporting_span": "In the setting of blunt thoracic trauma, a widened mediastinum on chest radiography is concerning for aortic injury and should prompt CT angiography.",
+      "topic": "critical finding; aortic injury; trauma; CTA"
+    },
+    {
+      "id": "acr-actionable-reporting",
+      "claim": "Under the ACR Practice Parameter for Communication of Diagnostic Imaging Findings, non-routine or critical findings must be communicated directly to the ordering provider in a timely, closed-loop manner and the communication documented.",
+      "verdict": "supported",
+      "section": "ACR Practice Parameter — Communication of Diagnostic Imaging Findings",
+      "url": "https://www.acr.org/-/media/ACR/Files/Practice-Parameters/CommunicationDiag.pdf",
+      "supporting_span": "Findings that suggest a need for immediate or urgent intervention, or that are unexpected and clinically significant, should be communicated directly to the referring physician in a manner that reasonably ensures timely receipt, and the communication should be documented.",
+      "topic": "actionable reporting; critical results; closed-loop communication"
+    },
+    {
+      "id": "sign-effusion-blunting",
+      "claim": "Blunting of the costophrenic angle on an upright chest radiograph indicates a pleural effusion; the lateral view is more sensitive and can detect smaller effusions than the frontal view.",
+      "verdict": "supported",
+      "section": "Plain-radiograph sign — costophrenic angle blunting",
+      "url": "https://radiopaedia.org/articles/pleural-effusion",
+      "supporting_span": "Blunting of the costophrenic angle on an erect chest radiograph indicates pleural fluid; lateral radiographs are more sensitive and can reveal effusions not seen on the frontal projection.",
+      "topic": "imaging sign; pleural effusion; costophrenic angle"
+    },
+    {
+      "id": "sign-cardiothoracic-ratio",
+      "claim": "On an adequately inspired, upright PA chest radiograph, a cardiothoracic ratio greater than 0.5 suggests cardiomegaly; the measurement is unreliable on AP, supine, or poorly inspired films.",
+      "verdict": "supported",
+      "section": "Plain-radiograph measurement — cardiothoracic ratio",
+      "url": "https://radiopaedia.org/articles/cardiothoracic-ratio",
+      "supporting_span": "A cardiothoracic ratio exceeding 0.5 on a posteroanterior erect chest radiograph suggests cardiomegaly, but the ratio is unreliable on anteroposterior, supine, or underinspired radiographs.",
+      "topic": "imaging measurement; cardiomegaly; cardiothoracic ratio"
+    },
+    {
+      "id": "satisfaction-of-search",
+      "claim": "Satisfaction of search is a well-documented perceptual error in radiology in which detection of one abnormality reduces the likelihood of detecting additional, unrelated abnormalities; a deliberate exhaustive secondary review mitigates it.",
+      "verdict": "supported",
+      "section": "Diagnostic-error literature — satisfaction of search",
+      "url": "https://pubs.rsna.org/doi/10.1148/rg.2018170048",
+      "supporting_span": "Satisfaction of search occurs when the detection of one finding interferes with the detection of others; a systematic, complete review of the study after an initial finding is identified reduces this error.",
+      "topic": "perceptual error; satisfaction of search; secondary review"
+    }
+  ]
+}

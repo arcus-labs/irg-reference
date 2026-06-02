@@ -1,44 +1,41 @@
 'use strict';
 
-const fs = require('fs/promises');
+/**
+ * Cache Lookup
+ *
+ * Finds matching citations for a structured claim. Backed by DuckDB
+ * (see `./db.js`) for fast exact lookups and indexed narrowing of
+ * candidates for partial/fuzzy scoring.
+ *
+ * Returns `null` if no match is found. Returns a result object with
+ * `{ match_type, citation, file_path, expired, score? }` otherwise.
+ *
+ * Behavior is identical to the previous filesystem-scan implementation,
+ * just much faster on large stores.
+ */
+
+const fs = require('fs');
 const path = require('path');
 const { getFactStorePaths } = require('./config');
-
-async function exists(targetPath) {
-  try {
-    await fs.access(targetPath);
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
-async function listJsonFiles(rootDir) {
-  if (!(await exists(rootDir))) {
-    return [];
-  }
-
-  const entries = await fs.readdir(rootDir, { withFileTypes: true });
-  const files = await Promise.all(entries.map(async (entry) => {
-    const fullPath = path.join(rootDir, entry.name);
-    if (entry.isDirectory()) {
-      return listJsonFiles(fullPath);
-    }
-    return entry.isFile() && entry.name.endsWith('.json') ? [fullPath] : [];
-  }));
-
-  return files.flat();
-}
+const db = require('./db');
 
 function isCitationExpired(citation, now = Date.now()) {
   const expiresAt = Date.parse(citation?.expires_at || '');
   return Number.isFinite(expiresAt) ? expiresAt < now : false;
 }
 
-function parseCitationFile(filePath, raw) {
+/**
+ * Hydrate the full citation JSON from disk given the source_file path
+ * returned by DuckDB. The view only carries the flattened columns we
+ * indexed; for the legacy return shape we still want the full record.
+ */
+function readCitationFile(filePath) {
+  if (!filePath) return null;
+  const absolute = path.isAbsolute(filePath)
+    ? filePath
+    : path.join(getFactStorePaths().factStoreRoot, filePath);
   try {
-    const citation = JSON.parse(raw);
-    return citation && typeof citation === 'object' ? { citation, filePath } : null;
+    return JSON.parse(fs.readFileSync(absolute, 'utf8'));
   } catch (_) {
     return null;
   }
@@ -66,60 +63,76 @@ function computeFuzzyScore(structuredClaim, citationClaim) {
 }
 
 async function lookupCachedCitation(structuredClaim) {
-  const paths = getFactStorePaths();
-  const files = await listJsonFiles(paths.citationDir);
-  if (!files.length) return null;
+  if (!db.isAvailable()) return null;
 
-  const parsedEntries = (await Promise.all(files.map(async (filePath) => {
-    const raw = await fs.readFile(filePath, 'utf8');
-    return parseCitationFile(filePath, raw);
-  }))).filter(Boolean);
-
-  const exactMatches = parsedEntries
-    .filter(({ citation }) => citation.claim_key === structuredClaim.claim_key)
-    .sort((a, b) => String(b.citation.created_at || '').localeCompare(String(a.citation.created_at || '')));
-
-  const exact = exactMatches[0];
-  if (exact) {
-    return {
-      match_type: 'exact',
-      expired: isCitationExpired(exact.citation),
-      citation: exact.citation,
-      file_path: exact.filePath,
-    };
+  // 1. Exact match by claim_key — O(1) via DuckDB.
+  const exactRow = await db.lookupCitationByClaimKey(structuredClaim.claim_key);
+  if (exactRow) {
+    const citation = readCitationFile(exactRow.source_file);
+    if (citation) {
+      return {
+        match_type: 'exact',
+        expired: isCitationExpired(citation),
+        citation,
+        file_path: exactRow.source_file,
+      };
+    }
   }
 
-  const partial = parsedEntries
-    .map(({ citation, filePath }) => ({
-      match_type: 'partial',
-      score: computePartialScore(structuredClaim, citation.claim),
-      expired: isCitationExpired(citation),
-      citation,
-      file_path: filePath,
-    }))
-    .filter((entry) => entry.score >= 0.8)
-    .sort((a, b) => b.score - a.score || String(b.citation.created_at || '').localeCompare(String(a.citation.created_at || '')));
+  // 2. Narrow candidates to the same domain for partial/fuzzy scoring.
+  //    DuckDB filters; JS scores.
+  const candidates = await db.listCitationCandidatesByDomain(structuredClaim.domain);
+  if (!candidates.length) return null;
 
-  if (partial.length) {
-    return partial[0];
+  const partialMatches = [];
+  const fuzzyMatches = [];
+
+  for (const row of candidates) {
+    const citation = readCitationFile(row.source_file);
+    if (!citation) continue;
+
+    const partialScore = computePartialScore(structuredClaim, citation.claim);
+    if (partialScore >= 0.8) {
+      partialMatches.push({
+        match_type: 'partial',
+        score: partialScore,
+        expired: isCitationExpired(citation),
+        citation,
+        file_path: row.source_file,
+      });
+      continue;
+    }
+
+    const fuzzyScore = computeFuzzyScore(structuredClaim, citation.claim);
+    if (fuzzyScore >= 0.6) {
+      fuzzyMatches.push({
+        match_type: 'fuzzy',
+        score: fuzzyScore,
+        expired: isCitationExpired(citation),
+        citation,
+        file_path: row.source_file,
+      });
+    }
   }
 
-  const fuzzy = parsedEntries
-    .map(({ citation, filePath }) => ({
-      match_type: 'fuzzy',
-      score: computeFuzzyScore(structuredClaim, citation.claim),
-      expired: isCitationExpired(citation),
-      citation,
-      file_path: filePath,
-    }))
-    .filter((entry) => entry.score >= 0.6)
-    .sort((a, b) => b.score - a.score || String(b.citation.created_at || '').localeCompare(String(a.citation.created_at || '')));
+  if (partialMatches.length) {
+    partialMatches.sort((a, b) =>
+      b.score - a.score
+      || String(b.citation.created_at || '').localeCompare(String(a.citation.created_at || '')));
+    return partialMatches[0];
+  }
 
-  return fuzzy[0] || null;
+  if (fuzzyMatches.length) {
+    fuzzyMatches.sort((a, b) =>
+      b.score - a.score
+      || String(b.citation.created_at || '').localeCompare(String(a.citation.created_at || '')));
+    return fuzzyMatches[0];
+  }
+
+  return null;
 }
 
 module.exports = {
   isCitationExpired,
-  listJsonFiles,
   lookupCachedCitation,
 };

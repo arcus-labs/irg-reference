@@ -7,7 +7,24 @@ import './timeline-overrides.css';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import YAML from 'js-yaml';
+
+// Trace `response` / `draft_response` text is LLM-authored and rendered as raw
+// HTML (rehype-raw) so inline <citation> tags become React components. Raw HTML
+// from a model is an XSS vector, so every raw render is followed by
+// rehype-sanitize with a schema that ALLOWS the citation element (+ ref/seq)
+// on top of the safe markdown defaults, and strips everything else (scripts,
+// event handlers, javascript: URLs, etc.). Order matters: raw → sanitize.
+const citationSanitizeSchema = {
+  ...defaultSchema,
+  tagNames: [...(defaultSchema.tagNames || []), 'citation'],
+  attributes: {
+    ...defaultSchema.attributes,
+    citation: ['ref', 'seq'],
+  },
+};
+const safeRawRehypePlugins = [rehypeRaw, [rehypeSanitize, citationSanitizeSchema]] as const;
 
 import { calculateDiff, extractMeaningfulContent } from '@/lib/diff-calculator';
 import { DiffRenderer } from '@/lib/diff-renderer';
@@ -27,6 +44,8 @@ import Navigation from './Navigation';
 
 interface TraceNavigatorProps {
   trace: any;
+  /** filename in the traces/ directory — used to locate the source trace. */
+  filename?: string;
 }
 
 // Helper function to format node type names for display
@@ -55,6 +74,11 @@ const getNodeColor = (type: string) => {
     fact_check_pipeline_gate: { bg: 'var(--node-gate)', icon: 'var(--stone-light)' },
     citation_source_generation: { bg: 'var(--node-strategy)', icon: 'var(--stone-light)' },
     citation_write: { bg: 'var(--node-fact-check)', icon: 'var(--stone-light)' },
+    citation_fetch: { bg: 'var(--node-fact-check)', icon: 'var(--stone-light)' },
+    citation_verify: { bg: 'var(--node-fact-check)', icon: 'var(--stone-light)' },
+    citation_apply: { bg: 'var(--node-draft)', icon: 'var(--stone-light)' },
+    citation_quality: { bg: 'var(--node-meta-eval)', icon: 'var(--stone-light)' },
+    memory_recall: { bg: 'var(--node-fact-check)', icon: 'var(--stone-light)' },
     impact_prediction: { bg: 'var(--node-impact)', icon: 'var(--stone-light)' },
     revision: { bg: 'var(--node-draft)', icon: 'var(--stone-light)' },
     revise: { bg: 'var(--node-draft)', icon: 'var(--stone-light)' },
@@ -69,6 +93,27 @@ const getNodeColor = (type: string) => {
   };
   return colors[type] || { bg: 'var(--stone)', icon: 'var(--stone-light)' };
 };
+
+// Node types that have a dedicated chat component. Keep this in
+// sync with the dispatch block at the bottom of the trace render
+// loop — if you add a new <SomethingChat> there, add the type here
+// so the meta-summary box wrapper renders.
+const RENDERED_NODE_TYPES = new Set([
+  'clarify', 'clarification_gate', 'false_premise_gate',
+  'draft', 'fact_check', 'fact_check_pipeline', 'external_fact_check',
+  'fact_check_pipeline_gate',
+  'citation_source_generation', 'citation_write', 'citation_fetch', 'citation_verify',
+  'citation_apply', 'citation_quality',
+  'memory_recall',
+  'impact_prediction',
+  'revision', 'revise',
+  'convergence', 'convergence_check',
+  'response_strategy', 'adversary_critique',
+  'evaluate', 'strategy_evaluation',
+  'strategy', 'adversary', 'arbiter',
+  'strategy_gate', 'meta_evaluation', 'assessor',
+  'case_classification', 'case_recall',
+]);
 
 // Reusable markdown components configuration
 const markdownComponents = {
@@ -95,6 +140,223 @@ const markdownComponents = {
   em: ({ node, ...props }: any) => <em style={{ fontStyle: 'italic', color: 'var(--stone)' }} {...props} />,
   del: ({ node, ...props }: any) => <del style={{ textDecoration: 'line-through', color: 'var(--ink)', background: 'var(--code-keyword)', opacity: 0.3, padding: '0.25rem', borderRadius: '2px' }} {...props} />,
   ins: ({ node, ...props }: any) => <ins style={{ textDecoration: 'none', color: 'var(--ink)', background: 'var(--accent)', opacity: 0.2, padding: '0.25rem', borderRadius: '2px', fontWeight: 'bold' }} {...props} />,
+};
+
+// ---------------------------------------------------------------------------
+// Citations (Citation_Application.md §9)
+// ---------------------------------------------------------------------------
+
+const verdictColor = (verdict: string): string =>
+  verdict === 'refuted' ? 'var(--code-keyword)' : 'var(--accent)';
+
+const verdictLabel = (verdict: string): string =>
+  verdict === 'refuted' ? 'contradicts' : 'supports';
+
+// Build a `citation` markdown component bound to a uuid→reference lookup.
+// The resolved tag is <citation ref="<uuid…>" seq="<int…>">span</citation>;
+// we read ref/seq off the hast node (React reserves the `ref` prop, so it is
+// NOT available via component props — only via node.properties).
+const makeCitationMark = (refsByUuid: Record<string, any>) =>
+  ({ node, children }: any) => {
+    const props = node?.properties || {};
+    const seqRaw = props.seq != null ? String(props.seq) : '';
+    const refRaw = props.ref != null ? String(props.ref) : '';
+    const seqs = seqRaw.split(/\s+/).filter(Boolean);
+    const uuids = refRaw.split(/\s+/).filter(Boolean);
+    const refs = uuids.map((u) => refsByUuid[u]).filter(Boolean);
+    const primary = refs[0];
+    const marker = seqs.length ? `[${seqs.join(',')}]` : '';
+
+    const tooltip = refs
+      .map((r) => {
+        const conf = typeof r.verification_confidence === 'number'
+          ? ` (${(r.verification_confidence * 100).toFixed(0)}%)`
+          : '';
+        const src = r.sources?.[0];
+        const srcLine = src?.title ? `\n${src.title}` : '';
+        const span = src?.supporting_span || src?.excerpt;
+        const spanLine = span ? `\n“${span}”` : '';
+        return `${r.claim_text}\n${verdictLabel(r.verdict)}${conf}${srcLine}${spanLine}`;
+      })
+      .join('\n\n');
+
+    const url = primary?.sources?.find((s: any) => s?.url)?.url;
+    const color = primary ? verdictColor(primary.verdict) : 'var(--accent)';
+
+    return (
+      <span>
+        {children}
+        <sup
+          title={tooltip}
+          onClick={() => { if (url) window.open(url, '_blank', 'noopener,noreferrer'); }}
+          style={{
+            color,
+            fontWeight: 700,
+            cursor: url ? 'pointer' : 'help',
+            marginLeft: '1px',
+            fontSize: '0.75em',
+          }}
+        >
+          {marker}
+        </sup>
+      </span>
+    );
+  };
+
+const ReferencesSection = ({ references }: { references: any[] }) => (
+  <div style={{ background: 'var(--paper-warm)', borderRadius: '3px', padding: '1rem', borderLeft: '4px solid var(--rule)', marginTop: '0.75rem' }}>
+    <p style={{ fontWeight: 600, color: 'var(--ink)', marginBottom: '0.5rem', fontFamily: 'var(--serif)' }}>References</p>
+    <ol style={{ listStyleType: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+      {references.map((r) => (
+        <li key={r.uuid} style={{ display: 'flex', gap: '0.5rem', fontSize: '15px', lineHeight: 1.5 }}>
+          <span style={{ color: verdictColor(r.verdict), fontWeight: 700, minWidth: '1.6rem' }}>[{r.seq}]</span>
+          <span style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+            <span style={{ color: 'var(--ink)' }}>
+              {r.claim_text}{' '}
+              <span style={{ color: verdictColor(r.verdict), fontWeight: 600, textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.04em' }}>
+                {r.verdict}
+              </span>
+              {typeof r.verification_confidence === 'number' && (
+                <span style={{ color: 'var(--stone)', fontSize: '0.8rem' }}> · {(r.verification_confidence * 100).toFixed(0)}%</span>
+              )}
+            </span>
+            {(r.sources || []).map((s: any, i: number) => (
+              <span key={i} style={{ color: 'var(--stone)', fontSize: '0.85rem' }}>
+                {s.url ? (
+                  <a href={s.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                    {s.title || s.url}
+                  </a>
+                ) : (s.title || '')}
+                {(s.supporting_span || s.excerpt) && (
+                  <span style={{ fontStyle: 'italic' }}> — “{s.supporting_span || s.excerpt}”</span>
+                )}
+              </span>
+            ))}
+          </span>
+        </li>
+      ))}
+    </ol>
+  </div>
+);
+
+const CitationApplyChat = ({ content }: { content: any }) => {
+  const references = Array.isArray(content?.references) ? content.references : [];
+  const refsByUuid: Record<string, any> = {};
+  references.forEach((r: any) => { refsByUuid[r.uuid] = r; });
+
+  const rawResponse = content?.response || '';
+  const response = typeof rawResponse === 'string'
+    ? rawResponse.replace(/\\n/g, '\n').replace(/\\\\/g, '\\')
+    : '';
+
+  const components = { ...markdownComponents, citation: makeCitationMark(refsByUuid) };
+
+  const found = content?.tags_found ?? 0;
+  const validated = content?.tags_validated ?? 0;
+  const dropped = content?.refs_dropped ?? 0;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '16px' }}>
+      <div style={{ background: 'var(--paper-warm)', borderRadius: '3px', padding: '0.75rem', borderLeft: '4px solid var(--accent)' }}>
+        <p style={{ fontWeight: 600, color: 'var(--accent)' }}>Citations applied</p>
+        <p style={{ color: 'var(--ink)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
+          Tags found: {found} · validated: {validated} · dropped (invalid): {dropped} · references: {references.length}
+        </p>
+      </div>
+
+      {response && (
+        <div style={{ background: 'var(--paper-warm)', borderRadius: '3px', padding: '1rem', borderLeft: '4px solid var(--accent-light)' }}>
+          <p style={{ fontWeight: 600, color: 'var(--accent-light)', marginBottom: '0.75rem' }}>Cited Answer:</p>
+          <div className={styles.markdownContent}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={safeRawRehypePlugins as any} components={components}>
+              {response}
+            </ReactMarkdown>
+          </div>
+        </div>
+      )}
+
+      {references.length > 0 && <ReferencesSection references={references} />}
+
+      {references.length === 0 && (
+        <p style={{ color: 'var(--stone)', fontSize: '0.9rem' }}>No verified citations were available for this response.</p>
+      )}
+    </div>
+  );
+};
+
+const QualityGauge = ({ label, value }: { label: string; value: number | null }) => {
+  const pct = typeof value === 'number' ? Math.round(value * 100) : null;
+  const color = pct == null ? 'var(--stone)' : pct >= 80 ? 'var(--accent)' : pct >= 50 ? 'var(--code-func)' : 'var(--code-keyword)';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', minWidth: '5.5rem' }}>
+      <span style={{ fontSize: '0.75rem', color: 'var(--stone)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
+      <span style={{ fontSize: '1.5rem', fontWeight: 700, color, fontFamily: 'var(--serif)' }}>
+        {pct == null ? 'N/A' : `${pct}%`}
+      </span>
+    </div>
+  );
+};
+
+const CitationQualityChat = ({ content }: { content: any }) => {
+  const c = content || {};
+  const counts = c.counts || {};
+  const sentences = Array.isArray(c.sentences) ? c.sentences : [];
+
+  if (c.evaluated === false) {
+    return (
+      <div style={{ background: 'var(--paper-warm)', borderRadius: '3px', padding: '0.75rem', borderLeft: '4px solid var(--rule)' }}>
+        <p style={{ fontWeight: 600, color: 'var(--ink)' }}>Citation Quality</p>
+        <p style={{ color: 'var(--stone)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
+          Not scored — {c.reason || 'no citations to evaluate'}.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '16px' }}>
+      <div style={{ background: 'var(--paper-warm)', borderRadius: '3px', padding: '1rem', borderLeft: '4px solid var(--accent)' }}>
+        <p style={{ fontWeight: 600, color: 'var(--accent)', marginBottom: '0.75rem' }}>Citation Quality (ALCE-style)</p>
+        <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+          <QualityGauge label="Recall" value={c.citation_recall} />
+          <QualityGauge label="Precision" value={c.citation_precision} />
+          <QualityGauge label="F1" value={c.citation_f1} />
+        </div>
+        <p style={{ color: 'var(--stone)', fontSize: '0.85rem', marginTop: '0.75rem' }}>
+          {counts.claim_bearing ?? 0} claim-bearing · {counts.claim_bearing_supported ?? 0} backed ·{' '}
+          {counts.uncited_claims ?? 0} uncited · {counts.misattributed_citations ?? 0} misattributed
+        </p>
+      </div>
+
+      {sentences.length > 0 && (
+        <div style={{ background: 'var(--paper-warm)', borderRadius: '3px', padding: '1rem', borderLeft: '4px solid var(--rule)' }}>
+          <p style={{ fontWeight: 600, color: 'var(--ink)', marginBottom: '0.5rem' }}>Per-sentence audit</p>
+          <ul style={{ listStyleType: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            {sentences.map((s: any, i: number) => {
+              const flagColor = !s.claim_bearing
+                ? 'var(--stone)'
+                : s.has_citation && s.citation_supports
+                  ? 'var(--accent)'
+                  : 'var(--code-keyword)';
+              const tag = !s.claim_bearing
+                ? 'non-claim'
+                : !s.has_citation
+                  ? 'uncited claim'
+                  : s.citation_supports
+                    ? `cited [${(s.cited_seqs || []).join(',')}]`
+                    : 'misattributed';
+              return (
+                <li key={i} style={{ display: 'flex', gap: '0.5rem', fontSize: '0.9rem', lineHeight: 1.4 }}>
+                  <span style={{ color: flagColor, fontWeight: 600, minWidth: '7rem', fontSize: '0.75rem', textTransform: 'uppercase' }}>{tag}</span>
+                  <span style={{ color: 'var(--ink)' }}>{s.text}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 };
 
 // Helper function to create consistent box styles
@@ -203,6 +465,44 @@ const extractMeaningfulText = (node: any): string => {
       const written = content.summary?.written_citations ?? content.citations?.length ?? 0;
       const totalClaims = content.summary?.total_claims ?? content.claims?.length ?? 0;
       return `Citations written: ${written} / ${totalClaims}`;
+    }
+
+    case 'citation_fetch': {
+      const fetched = content.sources_fetched ?? 0;
+      const failed = content.sources_failed ?? 0;
+      const ms = content.duration_ms ?? 0;
+      return `Sources fetched: ${fetched} | Failed: ${failed} | ${ms}ms`;
+    }
+
+    case 'citation_verify': {
+      const sup = content.supported ?? 0;
+      const ref = content.refuted ?? 0;
+      const inc = content.inconclusive ?? 0;
+      const calls = content.llm_calls ?? 0;
+      return `Supported: ${sup} | Refuted: ${ref} | Inconclusive: ${inc} | LLM calls: ${calls}`;
+    }
+
+    case 'memory_recall': {
+      const checked = content.claims_checked ?? 0;
+      const seen = content.previously_seen ?? 0;
+      const hit = content.recalled ?? 0;
+      const verified = content.recalled_verified ?? 0;
+      const neighbors = content.semantic_neighbors_found ?? 0;
+      const semanticTail = neighbors > 0 ? ` | Semantic: ${neighbors}` : '';
+      return `Checked: ${checked} | Prior: ${seen} | Cited: ${hit} | Verified: ${verified}${semanticTail}`;
+    }
+
+    case 'citation_apply': {
+      const built = content.references_built ?? (Array.isArray(content.references) ? content.references.length : 0);
+      const found = content.tags_found ?? 0;
+      const dropped = content.refs_dropped ?? 0;
+      return `Citations: ${built} | Tags: ${found} | Dropped: ${dropped}`;
+    }
+
+    case 'citation_quality': {
+      if (content.evaluated === false) return 'Citation quality: not scored (no citations)';
+      const pct = (v: number | null | undefined) => (typeof v === 'number' ? `${Math.round(v * 100)}%` : 'N/A');
+      return `Recall: ${pct(content.citation_recall)} | Precision: ${pct(content.citation_precision)} | F1: ${pct(content.citation_f1)}`;
     }
 
     case 'impact_prediction':
@@ -349,7 +649,7 @@ const RevisionChat = ({ content, traceArray, nodeId }: { content: any; traceArra
           <div style={{ background: 'var(--paper-warm)', borderRadius: '3px', padding: '1rem', border: '1px solid var(--rule)' }}>
             <p style={{ fontSize: '16px', fontWeight: 600, color: 'var(--ink)', marginBottom: '0.75rem' }}>✅ Revised</p>
             <div style={{ color: 'var(--ink)', lineHeight: 1.6, fontSize: '16px', fontWeight: 400, maxHeight: '60vh', overflowY: 'auto', maxWidth: '100%' }} className={styles.markdownContent}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={markdownComponents}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={safeRawRehypePlugins as any} components={markdownComponents}>
                 {revisedVersion}
               </ReactMarkdown>
             </div>
@@ -1269,6 +1569,276 @@ const CitationWriteChat = ({ content }: { content: any }) => {
   );
 };
 
+const CitationFetchChat = ({ content }: { content: any }) => {
+  const results = Array.isArray(content?.results) ? content.results : [];
+  const allSources = results.flatMap((r: any) => Array.isArray(r?.sources) ? r.sources : []);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '16px' }}>
+      {renderStatGrid([
+        { label: 'Citations Processed', value: content?.citations_processed ?? results.length },
+        { label: 'Sources Fetched',     value: content?.sources_fetched ?? 0 },
+        { label: 'Sources Failed',      value: content?.sources_failed ?? 0 },
+        { label: 'Sources Skipped',     value: content?.sources_skipped ?? 0 },
+        { label: 'Citation Errors',     value: content?.citation_errors ?? 0 },
+        { label: 'Duration',            value: content?.duration_ms !== undefined ? `${content.duration_ms}ms` : null },
+      ], 'var(--node-fact-check)', 'Citation Fetch Summary')}
+
+      {allSources.length > 0 && (
+        <div style={createBoxStyle('var(--code-func)')}>
+          <p style={createBoxTitleStyle('var(--code-func)')}>Fetched Sources:</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+            {allSources.map((s: any, i: number) => {
+              const failed = !!s?.error;
+              return (
+                <div
+                  key={i}
+                  style={{
+                    background: 'var(--paper)',
+                    borderRadius: '2px',
+                    padding: '0.6rem 0.75rem',
+                    borderLeft: `3px solid ${failed ? 'var(--code-keyword)' : 'var(--accent)'}`,
+                    border: '1px solid var(--rule)',
+                  }}
+                >
+                  {s?.extracted_title && (
+                    <p style={{ color: 'var(--ink)', fontWeight: 600, marginBottom: '0.2rem' }}>{s.extracted_title}</p>
+                  )}
+                  <p style={{ color: 'var(--stone)', fontSize: '14px', fontFamily: 'var(--mono)', wordBreak: 'break-all', marginBottom: '0.2rem' }}>
+                    {s?.url}
+                  </p>
+                  <p style={{ color: 'var(--stone)', fontSize: '13px', marginBottom: '0.2rem' }}>
+                    {failed
+                      ? <span style={{ color: 'var(--code-keyword)' }}>Error: {s.error}</span>
+                      : (
+                        <>
+                          <strong>Status:</strong> {s?.status_code ?? '-'} •
+                          {' '}<strong>HTML:</strong> {s?.source_file ? '✓' : '—'} •
+                          {' '}<strong>Markdown:</strong> {s?.markdown_file ? '✓' : '—'} •
+                          {' '}<strong>Retrieved:</strong> {s?.retrieved_at ? new Date(s.retrieved_at).toLocaleString() : '—'}
+                        </>
+                      )
+                    }
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const VERDICT_COLOR: Record<string, string> = {
+  supported:    'var(--accent)',
+  refuted:      'var(--code-keyword)',
+  inconclusive: 'var(--stone)',
+  off_topic:    'var(--stone-light)',
+  unreachable:  'var(--stone-light)',
+  contested:    'var(--code-string)',
+  unverified:   'var(--stone-light)',
+};
+
+const CitationVerifyChat = ({ content }: { content: any }) => {
+  const results = Array.isArray(content?.results) ? content.results : [];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '16px' }}>
+      {renderStatGrid([
+        { label: 'Citations Processed', value: content?.citations_processed ?? results.length },
+        { label: 'Supported',           value: content?.supported ?? 0 },
+        { label: 'Refuted',             value: content?.refuted ?? 0 },
+        { label: 'Inconclusive',        value: content?.inconclusive ?? 0 },
+        { label: 'Off-Topic',           value: content?.off_topic ?? 0 },
+        { label: 'Unreachable',         value: content?.unreachable ?? 0 },
+        { label: 'LLM Calls',           value: content?.llm_calls ?? 0 },
+        { label: 'Duration',            value: content?.duration_ms !== undefined ? `${content.duration_ms}ms` : null },
+      ], 'var(--node-fact-check)', 'Citation Verify Summary')}
+
+      {results.length > 0 && (
+        <div style={createBoxStyle('var(--code-func)')}>
+          <p style={createBoxTitleStyle('var(--code-func)')}>Per-Citation Verdicts:</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            {results.map((r: any, i: number) => {
+              const verdict = r?.verdict || 'unverified';
+              const color = VERDICT_COLOR[verdict] || 'var(--stone)';
+              return (
+                <div key={i} style={{ background: 'var(--paper)', borderRadius: '2px', padding: '0.75rem', border: '1px solid var(--rule)', borderLeft: `3px solid ${color}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.35rem' }}>
+                    <p style={{ color, fontWeight: 600, margin: 0, fontSize: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      {verdict}
+                    </p>
+                    {r?.claim_key && (
+                      <p style={{ color: 'var(--stone)', fontFamily: 'var(--mono)', fontSize: '12px', margin: 0 }}>
+                        {String(r.claim_key).slice(0, 12)}…
+                      </p>
+                    )}
+                  </div>
+                  {r?.breakdown && (
+                    <p style={{ color: 'var(--stone)', fontSize: '13px', marginBottom: '0.4rem' }}>
+                      <strong>Sources:</strong> {r.breakdown.supported || 0} supported,
+                      {' '}{r.breakdown.refuted || 0} refuted,
+                      {' '}{r.breakdown.inconclusive || 0} inconclusive,
+                      {' '}{r.breakdown.off_topic || 0} off-topic,
+                      {' '}{r.breakdown.unreachable || 0} unreachable
+                    </p>
+                  )}
+                  {Array.isArray(r?.sources) && r.sources.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.4rem' }}>
+                      {r.sources.map((s: any, j: number) => {
+                        const v = s?.verification?.verdict || 'unreachable';
+                        const c = VERDICT_COLOR[v] || 'var(--stone)';
+                        return (
+                          <div key={j} style={{ paddingLeft: '0.5rem', borderLeft: `2px solid ${c}` }}>
+                            {s?.extracted_title && (
+                              <p style={{ color: 'var(--ink)', fontSize: '14px', fontWeight: 500, margin: 0 }}>{s.extracted_title}</p>
+                            )}
+                            <p style={{ color: 'var(--stone)', fontFamily: 'var(--mono)', fontSize: '12px', wordBreak: 'break-all', margin: 0 }}>{s?.url}</p>
+                            <p style={{ color: c, fontSize: '13px', margin: '0.2rem 0 0 0' }}>
+                              <strong>{v}</strong>
+                              {typeof s?.verification?.confidence === 'number' && (
+                                <span style={{ color: 'var(--stone)' }}>{' '}· {(s.verification.confidence * 100).toFixed(0)}% confidence</span>
+                              )}
+                              {s?.verification?.reasoning && (
+                                <span style={{ color: 'var(--stone)' }}> — {s.verification.reasoning}</span>
+                              )}
+                            </p>
+                            {s?.verification?.quoted_excerpt && (
+                              <p style={{ color: 'var(--ink)', fontStyle: 'italic', fontSize: '13px', margin: '0.2rem 0 0 0', borderLeft: '2px solid var(--rule)', paddingLeft: '0.5rem' }}>
+                                “{s.verification.quoted_excerpt}”
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const MemoryRecallChat = ({ content }: { content: any }) => {
+  const results = Array.isArray(content?.results) ? content.results : [];
+  const hits = results.filter((r: any) => r?.recall?.hit);
+  const priorSeenItems = results.filter((r: any) => r?.previously_seen);
+  const neighborGroups = results.filter((r: any) => Array.isArray(r?.semantic_neighbors) && r.semantic_neighbors.length > 0);
+  const provider = content?.embedding_provider || null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '16px' }}>
+      {renderStatGrid([
+        { label: 'Claims Checked',     value: content?.claims_checked ?? results.length },
+        { label: 'Previously Seen',    value: content?.previously_seen ?? 0 },
+        { label: 'Cited (any)',        value: content?.recalled ?? 0 },
+        { label: 'Verified Citations', value: content?.recalled_verified ?? 0 },
+        { label: 'Semantic Neighbors', value: content?.semantic_neighbors_found ?? 0 },
+        { label: 'Embedding Model',    value: provider },
+      ], 'var(--node-fact-check)', 'Memory Recall Summary')}
+
+      {priorSeenItems.length > 0 && hits.length === 0 && (
+        <div style={createBoxStyle('var(--accent-light)')}>
+          <p style={createBoxTitleStyle('var(--accent-light)')}>Previously seen — exact matches in prior sessions:</p>
+          <ul style={{ listStyleType: 'disc', marginLeft: '1.5rem', color: 'var(--ink)', display: 'flex', flexDirection: 'column', gap: '0.3rem', margin: 0, paddingLeft: '1.5rem' }}>
+            {priorSeenItems.map((r: any, i: number) => (
+              <li key={i} style={{ fontSize: '14px', color: 'var(--ink)' }}>{r.claim_text}</li>
+            ))}
+          </ul>
+          <p style={{ color: 'var(--stone)', fontSize: '12px', marginTop: '0.5rem', fontStyle: 'italic' }}>
+            These claims have been persisted before. Run <code>irg-external-facts</code> on a query
+            covering them to write verified citations.
+          </p>
+        </div>
+      )}
+
+      {results.length === 0 && (
+        <div style={createBoxStyle('var(--stone-light)')}>
+          <p style={{ color: 'var(--stone)', margin: 0 }}>No claims were available to look up in memory.</p>
+        </div>
+      )}
+
+      {hits.length > 0 && (
+        <div style={createBoxStyle('var(--accent)')}>
+          <p style={createBoxTitleStyle('var(--accent)')}>Hits — prior evidence found:</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {hits.map((r: any, i: number) => {
+              const v = r?.recall?.verdict || 'unknown';
+              const c = VERDICT_COLOR[v] || 'var(--stone)';
+              return (
+                <div key={i} style={{ background: 'var(--paper)', borderRadius: '2px', padding: '0.6rem 0.75rem', border: '1px solid var(--rule)', borderLeft: `3px solid ${c}` }}>
+                  <p style={{ color: 'var(--ink)', fontSize: '14px', fontWeight: 500, margin: 0, marginBottom: '0.2rem' }}>{r.claim_text}</p>
+                  <p style={{ color: c, fontSize: '13px', margin: 0 }}>
+                    <strong>{v}</strong>
+                    {r?.recall?.verification_level && (
+                      <span style={{ color: 'var(--stone)' }}> · {r.recall.verification_level}</span>
+                    )}
+                    {r?.recall?.source_count !== undefined && (
+                      <span style={{ color: 'var(--stone)' }}> · {r.recall.source_count} source{r.recall.source_count === 1 ? '' : 's'}</span>
+                    )}
+                    {r?.recall?.created_at && (
+                      <span style={{ color: 'var(--stone)' }}> · cached {new Date(r.recall.created_at).toLocaleDateString()}</span>
+                    )}
+                  </p>
+                  {r?.recall?.citation_path && (
+                    <p style={{ color: 'var(--stone)', fontFamily: 'var(--mono)', fontSize: '12px', wordBreak: 'break-all', margin: '0.2rem 0 0 0' }}>{r.recall.citation_path}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {neighborGroups.length > 0 && (
+        <div style={createBoxStyle('var(--code-string)')}>
+          <p style={createBoxTitleStyle('var(--code-string)')}>Semantic Neighbors — related prior claims:</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            {neighborGroups.map((r: any, i: number) => (
+              <div key={i} style={{ background: 'var(--paper)', borderRadius: '2px', padding: '0.6rem 0.75rem', border: '1px solid var(--rule)' }}>
+                <p style={{ color: 'var(--stone)', fontSize: '13px', margin: 0, marginBottom: '0.3rem' }}>
+                  Current claim:
+                </p>
+                <p style={{ color: 'var(--ink)', fontSize: '14px', fontWeight: 500, margin: 0, marginBottom: '0.4rem' }}>
+                  {r.claim_text}
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', paddingLeft: '0.75rem', borderLeft: '2px solid var(--rule)' }}>
+                  {r.semantic_neighbors.map((n: any, j: number) => (
+                    <div key={j}>
+                      <p style={{ color: 'var(--ink)', fontSize: '13px', margin: 0 }}>
+                        {n.claim_text}
+                      </p>
+                      <p style={{ color: 'var(--stone)', fontSize: '12px', fontFamily: 'var(--mono)', margin: 0 }}>
+                        similarity {(n.similarity || 0).toFixed(3)}
+                        {n.domain && <> · {n.domain}</>}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {results.length > 0 && hits.length === 0 && neighborGroups.length === 0 && (
+        <div style={createBoxStyle('var(--stone-light)')}>
+          <p style={{ color: 'var(--stone)', margin: 0 }}>
+            No prior evidence found for these claims — exact or semantic. The fact-store will accrue
+            claims as queries are processed; once citations are written via <code>irg-external-facts</code>,
+            future runs will recall them here.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ImpactPredictionChat = ({ content }: { content: any }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '16px' }}>
     {/* Handle implications (potential impacts) */}
@@ -2096,11 +2666,285 @@ const ClarifyChat = ({ content }: { content: any }) => {
   );
 };
 
+// Reg E adjudication outcome — rendered on traces produced by the
+// `irg-reg-e-adjudication` runner. Surfaces the structured decision artifact
+// (issue, rule, application findings, recourse) and the consumer notice
+// letter alongside the reasoning trace, so the UI is the demo, not the CLI.
+const AdjudicationOutcomeSection = ({ adjudication }: { adjudication: any }) => {
+  const decision = adjudication?.decision || {};
+  const notice = typeof adjudication?.notice_letter === 'string' ? adjudication.notice_letter : '';
+  const findings = Array.isArray(decision.application_findings) ? decision.application_findings : [];
+  const recourse = Array.isArray(decision.consumer_recourse) ? decision.consumer_recourse : [];
+  const nextSteps = Array.isArray(decision.regulatory_next_steps) ? decision.regulatory_next_steps : [];
+  const ruleList = Array.isArray(decision.rule) ? decision.rule : (decision.rule ? [decision.rule] : []);
+
+  const decisionBadge =
+    decision.decision === 'accept' ? { bg: 'var(--accent)', label: 'ACCEPT' } :
+    decision.decision === 'deny' ? { bg: 'var(--code-keyword)', label: 'DENY' } :
+    decision.decision === 'partial' ? { bg: 'var(--code-func)', label: 'PARTIAL' } :
+    { bg: 'var(--stone)', label: String(decision.decision || 'PENDING').toUpperCase() };
+
+  const supportColor = (s: string) =>
+    s === 'accept' ? 'var(--accent)' :
+    s === 'deny' ? 'var(--code-keyword)' :
+    'var(--stone)';
+
+  return (
+    <div style={{ marginBottom: '2rem' }}>
+      <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--ink)', fontFamily: 'var(--serif)', marginBottom: '1rem' }}>
+        Adjudication Outcome
+        {adjudication?.case_id && (
+          <span style={{ marginLeft: '0.75rem', fontSize: '0.85rem', color: 'var(--stone)', fontFamily: 'var(--mono)', fontWeight: 400 }}>
+            · {adjudication.case_id}
+          </span>
+        )}
+      </h3>
+
+      {/* Decision card */}
+      <div style={{ background: 'var(--paper-warm)', borderRadius: '3px', padding: '1.5rem', borderLeft: `4px solid ${decisionBadge.bg}`, marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          <span style={{ padding: '0.35rem 0.75rem', borderRadius: '3px', background: decisionBadge.bg, color: 'var(--paper)', fontWeight: 700, fontSize: '0.95rem', letterSpacing: '0.05em' }}>
+            {decisionBadge.label}
+          </span>
+          {typeof decision.refund_amount_usd === 'number' && (
+            <span style={{ color: 'var(--ink)', fontFamily: 'var(--mono)', fontSize: '1rem' }}>
+              refund <strong>${decision.refund_amount_usd}</strong>
+            </span>
+          )}
+          {decision.liability_tier && (
+            <span style={{ color: 'var(--stone)', fontSize: '0.9rem' }}>
+              liability tier · <span style={{ color: 'var(--ink)', fontFamily: 'var(--mono)' }}>{decision.liability_tier}</span>
+            </span>
+          )}
+        </div>
+
+        {decision.issue && (
+          <div style={{ marginBottom: '0.75rem' }}>
+            <p style={{ color: 'var(--stone)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Issue</p>
+            <p style={{ color: 'var(--ink)', fontSize: '1rem', lineHeight: 1.5 }}>{decision.issue}</p>
+          </div>
+        )}
+
+        {ruleList.length > 0 && (
+          <div style={{ marginBottom: '0.75rem' }}>
+            <p style={{ color: 'var(--stone)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Rule</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {ruleList.map((r: string, i: number) => (
+                <span key={i} style={{ padding: '0.2rem 0.5rem', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: '2px', fontFamily: 'var(--mono)', fontSize: '0.85rem', color: 'var(--ink)' }}>{r}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {decision.conclusion && (
+          <div>
+            <p style={{ color: 'var(--stone)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Conclusion</p>
+            <p style={{ color: 'var(--ink)', fontSize: '1rem', lineHeight: 1.6 }}>{decision.conclusion}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Application findings */}
+      {findings.length > 0 && (
+        <div style={{ background: 'var(--paper-warm)', borderRadius: '3px', padding: '1.5rem', borderLeft: '4px solid var(--code-type)', marginBottom: '1rem' }}>
+          <p style={{ color: 'var(--code-type)', fontWeight: 600, marginBottom: '0.75rem' }}>Application Findings</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            {findings.map((f: any, i: number) => (
+              <div key={i} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                <span style={{ padding: '0.15rem 0.45rem', borderRadius: '2px', fontSize: '0.7rem', fontWeight: 700, background: supportColor(f.supports), color: 'var(--paper)', textTransform: 'uppercase', whiteSpace: 'nowrap', marginTop: '0.1rem' }}>
+                  {f.supports || 'context'}
+                </span>
+                <div style={{ flex: 1 }}>
+                  <p style={{ color: 'var(--ink)', fontSize: '0.95rem', lineHeight: 1.5, margin: 0 }}>{f.finding}</p>
+                  {Array.isArray(f.evidence) && f.evidence.length > 0 && (
+                    <div style={{ marginTop: '0.25rem', display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                      {f.evidence.map((e: string, j: number) => (
+                        <span key={j} style={{ padding: '0.1rem 0.4rem', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: '2px', fontFamily: 'var(--mono)', fontSize: '0.75rem', color: 'var(--stone)' }}>{e}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recourse + Next Steps */}
+      {(recourse.length > 0 || nextSteps.length > 0) && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+          {recourse.length > 0 && (
+            <div style={{ background: 'var(--paper-warm)', borderRadius: '3px', padding: '1rem', borderLeft: '4px solid var(--code-string)' }}>
+              <p style={{ color: 'var(--code-string)', fontWeight: 600, marginBottom: '0.5rem' }}>Consumer Recourse</p>
+              <ul style={{ listStyleType: 'disc', marginLeft: '1.25rem', color: 'var(--ink)', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                {recourse.map((r: string, i: number) => <li key={i} style={{ fontSize: '0.9rem', lineHeight: 1.5 }}>{r}</li>)}
+              </ul>
+            </div>
+          )}
+          {nextSteps.length > 0 && (
+            <div style={{ background: 'var(--paper-warm)', borderRadius: '3px', padding: '1rem', borderLeft: '4px solid var(--code-func)' }}>
+              <p style={{ color: 'var(--code-func)', fontWeight: 600, marginBottom: '0.5rem' }}>Regulatory Next Steps</p>
+              <ul style={{ listStyleType: 'disc', marginLeft: '1.25rem', color: 'var(--ink)', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                {nextSteps.map((r: string, i: number) => <li key={i} style={{ fontSize: '0.9rem', lineHeight: 1.5 }}>{r}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Notice letter — the consumer-facing artifact */}
+      {notice && (
+        <details open style={{ background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: '3px', padding: '0', marginBottom: '0.75rem' }}>
+          <summary style={{ padding: '0.85rem 1.25rem', cursor: 'pointer', fontWeight: 600, color: 'var(--accent)', fontFamily: 'var(--serif)', fontSize: '1rem', borderBottom: '1px solid var(--rule)' }}>
+            Consumer Notice Letter (§1005.11(d)/(e))
+          </summary>
+          <div style={{ padding: '1.25rem 1.5rem' }} className={styles.markdownContent}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={safeRawRehypePlugins as any} components={markdownComponents}>
+              {notice}
+            </ReactMarkdown>
+          </div>
+        </details>
+      )}
+
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Submitted Evidence — the input side of the trace.
+//
+// The adjudication runner attaches the actual files the IRG received as
+// `adjudication.artifacts: [{ id, name, type, role, size_bytes, content }]`.
+// This section renders them as inspectable documents near the Prompt so a
+// reviewer (or a regulator) can see the inputs alongside the determination.
+// Generalized for N artifacts so future multi-document submissions
+// (transaction CSVs, consumer chat logs, ID photos) plug in by type.
+// ---------------------------------------------------------------------------
+
+function parseEvidenceIndex(md: string): Array<{ id: string; fact: string }> {
+  const idxStart = md.indexOf('## Evidence Index');
+  if (idxStart === -1) return [];
+  const block = md.slice(idxStart);
+  const items: Array<{ id: string; fact: string }> = [];
+  const re = /^- \[([EeRr]\d+)\]\s+(.+)$/gm;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(block)) !== null) {
+    items.push({ id: m[1].toUpperCase(), fact: m[2].trim() });
+  }
+  return items;
+}
+
+function formatBytes(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '0 B';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+const ArtifactCard = ({ artifact }: { artifact: any }) => {
+  const name = artifact?.name || 'untitled';
+  const type = String(artifact?.type || 'unknown');
+  const role = artifact?.role || null;
+  const size = typeof artifact?.size_bytes === 'number' ? artifact.size_bytes : 0;
+  const content = typeof artifact?.content === 'string' ? artifact.content : '';
+  const evidenceIndex = type === 'markdown' ? parseEvidenceIndex(content) : [];
+  const mime = type === 'markdown' ? 'text/markdown' : type === 'csv' ? 'text/csv' : 'text/plain';
+  const dataUri = content
+    ? `data:${mime};charset=utf-8,${encodeURIComponent(content)}`
+    : null;
+
+  return (
+    <div style={{ background: 'var(--paper-warm)', borderRadius: '3px', padding: '1.25rem', borderLeft: '4px solid var(--accent)' }}>
+      {/* header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+        <span style={{ fontSize: '1.1rem' }} aria-hidden>📄</span>
+        <span style={{ fontFamily: 'var(--mono)', color: 'var(--ink)', fontSize: '1rem', fontWeight: 600 }}>{name}</span>
+        <span style={{ padding: '0.15rem 0.45rem', borderRadius: '2px', background: 'var(--paper)', border: '1px solid var(--rule)', fontSize: '0.7rem', fontFamily: 'var(--mono)', color: 'var(--stone)', textTransform: 'uppercase' }}>{type}</span>
+        {role && (
+          <span style={{ padding: '0.15rem 0.45rem', borderRadius: '2px', background: 'var(--accent)', color: 'var(--paper)', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{String(role).replace(/-/g, ' ')}</span>
+        )}
+        <span style={{ color: 'var(--stone)', fontSize: '0.85rem', fontFamily: 'var(--mono)' }}>{formatBytes(size)}</span>
+        {evidenceIndex.length > 0 && (
+          <span style={{ color: 'var(--stone)', fontSize: '0.85rem' }}>· {evidenceIndex.length} indexed items</span>
+        )}
+        {dataUri && (
+          <a
+            href={dataUri}
+            download={name}
+            style={{ marginLeft: 'auto', fontSize: '0.85rem', color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
+          >
+            ↓ Download
+          </a>
+        )}
+      </div>
+
+      {/* Quick-glance evidence index (markdown artifacts only) */}
+      {evidenceIndex.length > 0 && (
+        <div style={{ background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: '2px', padding: '0.75rem 1rem', marginBottom: '0.75rem' }}>
+          <p style={{ color: 'var(--stone)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Evidence Index</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+            {evidenceIndex.map((e, i) => (
+              <div key={i} style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', fontSize: '0.85rem' }}>
+                <span style={{ padding: '0.1rem 0.4rem', background: 'var(--paper-warm)', border: '1px solid var(--rule)', borderRadius: '2px', fontFamily: 'var(--mono)', color: 'var(--ink)', fontWeight: 600, flexShrink: 0 }}>{e.id}</span>
+                <span style={{ color: 'var(--ink)', lineHeight: 1.4 }}>{e.fact}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Full document */}
+      {content && (
+        <details style={{ background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: '2px' }}>
+          <summary style={{ padding: '0.65rem 1rem', cursor: 'pointer', fontWeight: 600, color: 'var(--stone)', fontSize: '0.9rem' }}>
+            View full document
+          </summary>
+          <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid var(--rule)' }} className={styles.markdownContent}>
+            {type === 'markdown' ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={safeRawRehypePlugins as any} components={markdownComponents}>
+                {content}
+              </ReactMarkdown>
+            ) : (
+              <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--ink)', fontFamily: 'var(--mono)', fontSize: '0.85rem', margin: 0 }}>{content}</pre>
+            )}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+};
+
+const SubmittedEvidenceSection = ({ artifacts }: { artifacts: any[] }) => {
+  if (!Array.isArray(artifacts) || artifacts.length === 0) return null;
+  return (
+    <div style={{ marginBottom: '2rem' }}>
+      <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--ink)', fontFamily: 'var(--serif)', marginBottom: '1rem' }}>
+        Submitted Evidence
+        <span style={{ marginLeft: '0.75rem', fontSize: '0.85rem', color: 'var(--stone)', fontFamily: 'var(--mono)', fontWeight: 400 }}>
+          {artifacts.length} artifact{artifacts.length === 1 ? '' : 's'}
+        </span>
+      </h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        {artifacts.map((a, i) => <ArtifactCard key={a?.id || i} artifact={a} />)}
+      </div>
+    </div>
+  );
+};
+
 export default function TraceNavigator({ trace }: TraceNavigatorProps) {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
   const traceArray = trace.trace || [];
   const query = trace.query || 'N/A';
+
+  // Citation rendering for the top-level Response (and the exit-node response):
+  // the LLM-emitted <citation ref seq> markup must render as inline UI markers
+  // (CitationMark) rather than escaping to literal text in the page. References
+  // live at the trace top level; build a uuid -> reference lookup once.
+  const topReferences = Array.isArray((trace as any).references) ? (trace as any).references : [];
+  const responseRefsByUuid: Record<string, any> = {};
+  topReferences.forEach((r: any) => { if (r && r.uuid) responseRefsByUuid[r.uuid] = r; });
+  const responseComponents = { ...markdownComponents, citation: makeCitationMark(responseRefsByUuid) };
 
   // Find the exit node to get actual metrics
   const exitNode = traceArray.find((node: any) => node?.type === 'exit');
@@ -2275,17 +3119,30 @@ export default function TraceNavigator({ trace }: TraceNavigatorProps) {
           </div>
         </div>
 
+        {/* Submitted Evidence — input artifacts the IRG received (adjudication traces). */}
+        {Array.isArray((trace as any).adjudication?.artifacts) && (
+          <SubmittedEvidenceSection artifacts={(trace as any).adjudication.artifacts} />
+        )}
+
         {/* Response Section */}
         <div style={{ marginBottom: '2rem' }}>
           <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--ink)', fontFamily: 'var(--serif)', marginBottom: '1rem' }}>Response</h3>
           <div style={{ background: 'var(--paper-warm)', borderRadius: '3px', padding: '1.5rem', borderLeft: '4px solid var(--accent)' }}>
             <div className={styles.markdownContent}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={safeRawRehypePlugins as any} components={responseComponents}>
                 {response}
               </ReactMarkdown>
             </div>
           </div>
+          {topReferences.length > 0 && <ReferencesSection references={topReferences} />}
         </div>
+
+        {/* Adjudication Outcome — present only on adjudication-graph traces.
+            Renders the structured decision artifact and the consumer notice
+            letter alongside the reasoning trace. */}
+        {(trace as any).adjudication && (
+          <AdjudicationOutcomeSection adjudication={(trace as any).adjudication} />
+        )}
 
         {/* Metrics Section */}
         <div style={{ marginBottom: '2rem' }}>
@@ -2328,7 +3185,7 @@ export default function TraceNavigator({ trace }: TraceNavigatorProps) {
         {traceArray.length === 0 ? (
           <p style={{ color: 'var(--stone)' }}>No reasoning steps recorded</p>
         ) : (
-          <VerticalTimeline layout="2-columns">
+          <VerticalTimeline layout="1-column-left">
             {traceArray.map((node: any, index: number) => {
               const colors = getNodeColor(node?.type || 'unknown');
               const timestamp = node?.timestamp ? new Date(node.timestamp).toLocaleTimeString() : 'N/A';
@@ -2343,8 +3200,10 @@ export default function TraceNavigator({ trace }: TraceNavigatorProps) {
                     color: 'var(--ink)',
                     border: isExitNode ? `3px solid var(--accent)` : `2px solid ${colors.bg}`,
                     borderRadius: '4px',
-                    maxWidth: isExitNode ? '100%' : '45%',
-                    width: isExitNode ? '100%' : undefined,
+                    // Single-column-left layout: cards fill the column (the old
+                    // 45% width was for the alternating two-column layout).
+                    maxWidth: '100%',
+                    width: undefined,
                     marginLeft: isExitNode ? 'auto' : undefined,
                     marginRight: isExitNode ? 'auto' : undefined,
                     boxShadow: isExitNode ? 'var(--shadow-strong)' : 'var(--shadow-soft)',
@@ -2403,7 +3262,7 @@ export default function TraceNavigator({ trace }: TraceNavigatorProps) {
                         <div style={{ background: 'var(--paper)', borderRadius: '3px', padding: '1.25rem', borderLeft: '4px solid var(--accent-light)' }}>
                           <p style={{ color: 'var(--stone)', fontSize: '16px', fontWeight: 600, marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Response</p>
                           <div style={{ color: 'var(--ink)', fontSize: '16px', fontWeight: 400, lineHeight: 1.7 }} className={styles.markdownContent}>
-                            <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                            <ReactMarkdown components={responseComponents} remarkPlugins={[remarkGfm]} rehypePlugins={safeRawRehypePlugins as any}>
                               {node?.content?.response || 'No response available'}
                             </ReactMarkdown>
                           </div>
@@ -2435,9 +3294,47 @@ export default function TraceNavigator({ trace }: TraceNavigatorProps) {
                     )}
 
                     {/* Meaningful Text Summary or Chat Format */}
-            {(node?.type === 'clarify' || node?.type === 'clarification_gate' || node?.type === 'false_premise_gate' || node?.type === 'draft' || node?.type === 'fact_check' || node?.type === 'fact_check_pipeline' || node?.type === 'external_fact_check' || node?.type === 'fact_check_pipeline_gate' || node?.type === 'citation_source_generation' || node?.type === 'citation_write' || node?.type === 'impact_prediction' || node?.type === 'revision' || node?.type === 'revise' || node?.type === 'convergence' || node?.type === 'convergence_check' || node?.type === 'response_strategy' || node?.type === 'adversary_critique' || node?.type === 'evaluate' || node?.type === 'strategy_evaluation' || node?.type === 'strategy' || node?.type === 'adversary' || node?.type === 'arbiter' || node?.type === 'strategy_gate' || node?.type === 'meta_evaluation' || node?.type === 'assessor') ? (
+            {RENDERED_NODE_TYPES.has(node?.type) ? (
                       <>
                         {node?.type === 'clarify' && <ClarifyChat content={node?.content} />}
+                        {node?.type === 'case_classification' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '16px' }}>
+                            <div style={createBoxStyle('var(--accent)')}>
+                              <p style={createBoxTitleStyle('var(--accent)')}>Locked Category:</p>
+                              <p style={{ color: 'var(--ink)', fontSize: '16px', fontWeight: 400 }}>
+                                <strong>{node?.content?.label || node?.content?.category || '—'}</strong>
+                                {node?.content?.section_anchor ? ` · ${node.content.section_anchor}` : ''}
+                              </p>
+                            </div>
+                            {node?.content?.reason && (
+                              <div style={createBoxStyle('var(--code-type)')}>
+                                <p style={createBoxTitleStyle('var(--code-type)')}>Rationale:</p>
+                                <p style={{ color: 'var(--ink)', fontSize: '16px', fontWeight: 400, lineHeight: 1.5 }}>{node.content.reason}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {node?.type === 'case_recall' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '16px' }}>
+                            <div style={createBoxStyle('var(--code-string)')}>
+                              <p style={createBoxTitleStyle('var(--code-string)')}>Citable Set Assembled:</p>
+                              <ul style={{ listStyleType: 'disc', marginLeft: '1.5rem', color: 'var(--ink)', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                <li style={{ fontSize: '16px' }}>{node?.content?.evidence_items ?? 0} evidence item(s) from the case packet</li>
+                                <li style={{ fontSize: '16px' }}>{node?.content?.regulation_rules_selected ?? 0} regulation rule(s) selected</li>
+                              </ul>
+                            </div>
+                            {Array.isArray(node?.content?.regulation_rule_ids) && node.content.regulation_rule_ids.length > 0 && (
+                              <div style={createBoxStyle('var(--code-func)')}>
+                                <p style={createBoxTitleStyle('var(--code-func)')}>Rules cited:</p>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                  {node.content.regulation_rule_ids.map((id: string, i: number) => (
+                                    <span key={i} style={{ padding: '0.15rem 0.5rem', background: 'var(--paper)', border: '1px solid var(--rule)', borderRadius: '2px', fontFamily: 'var(--mono)', fontSize: '0.78rem' }}>{id}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {node?.type === 'clarification_gate' && <ClarificationGateChat content={node?.content} />}
                         {node?.type === 'false_premise_gate' && <FalsePremiseGateChat content={node?.content} />}
                         {node?.type === 'draft' && <DraftChat content={node?.content} />}
@@ -2447,6 +3344,11 @@ export default function TraceNavigator({ trace }: TraceNavigatorProps) {
                 {node?.type === 'fact_check_pipeline_gate' && <FactCheckPipelineGateChat content={node?.content} />}
                 {node?.type === 'citation_source_generation' && <CitationSourceGenerationChat content={node?.content} />}
                 {node?.type === 'citation_write' && <CitationWriteChat content={node?.content} />}
+                {node?.type === 'citation_fetch' && <CitationFetchChat content={node?.content} />}
+                {node?.type === 'citation_verify' && <CitationVerifyChat content={node?.content} />}
+                {node?.type === 'memory_recall' && <MemoryRecallChat content={node?.content} />}
+                {node?.type === 'citation_apply' && <CitationApplyChat content={node?.content} />}
+                {node?.type === 'citation_quality' && <CitationQualityChat content={node?.content} />}
                         {node?.type === 'impact_prediction' && <ImpactPredictionChat content={node?.content} />}
                         {(node?.type === 'revision' || node?.type === 'revise') && <RevisionChat content={node?.content} traceArray={traceArray} nodeId={node?.id} />}
                         {(node?.type === 'convergence' || node?.type === 'convergence_check') && <ConvergenceCheckChat content={node?.content} traceArray={traceArray} nodeId={node?.id} />}
@@ -2762,7 +3664,7 @@ export default function TraceNavigator({ trace }: TraceNavigatorProps) {
                           </div>
                         )}
                       </>
-                    ) : (
+                    ) : isExitNode ? null : (
                       <div style={{ background: 'var(--paper)', borderRadius: '3px', padding: '0.75rem', fontSize: '16px', color: 'var(--ink)', fontWeight: 400, borderLeft: `2px solid ${colors.bg}` }}>
                         {extractMeaningfulText(node)}
                       </div>

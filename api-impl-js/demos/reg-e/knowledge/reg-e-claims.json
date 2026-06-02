@@ -1,0 +1,116 @@
+{
+  "pack": "reg-e-v0.1",
+  "regulation": "Regulation E — Electronic Fund Transfer Act, 12 CFR Part 1005",
+  "disclaimer": "These claims paraphrase federal regulation for demonstration of grounded reasoning. They are informational, may omit exceptions, and are not legal advice. Authoritative text: the eCFR.",
+  "domain": "finance",
+  "claims": [
+    {
+      "id": "regE-unauthorized-def",
+      "claim": "Under Regulation E, an unauthorized electronic fund transfer is a transfer from a consumer's account initiated by a person other than the consumer without actual authority to initiate the transfer and from which the consumer receives no benefit.",
+      "verdict": "supported",
+      "section": "12 CFR 1005.2(m)",
+      "url": "https://www.ecfr.gov/current/title-12/chapter-X/part-1005/subpart-A/section-1005.2",
+      "supporting_span": "Unauthorized electronic fund transfer means an electronic fund transfer from a consumer's account initiated by a person other than the consumer without actual authority to initiate the transfer and from which the consumer receives no benefit.",
+      "topic": "unauthorized transfer; definition"
+    },
+    {
+      "id": "regE-liability-tier1-50",
+      "claim": "Under Regulation E, if a consumer notifies their financial institution within two business days after learning of the loss or theft of an access device, the consumer's liability for unauthorized transfers is limited to the lesser of $50 or the amount of unauthorized transfers before notice.",
+      "verdict": "supported",
+      "section": "12 CFR 1005.6(b)(1)",
+      "url": "https://www.ecfr.gov/current/title-12/chapter-X/part-1005/subpart-A/section-1005.6",
+      "supporting_span": "If the consumer notifies the financial institution within two business days after learning of the loss or theft of the access device, the consumer's liability shall not exceed the lesser of $50 or the amount of unauthorized transfers that occur before notice.",
+      "topic": "liability; lost or stolen access device; $50"
+    },
+    {
+      "id": "regE-liability-tier2-500",
+      "claim": "Under Regulation E, a consumer who fails to notify the financial institution within two business days after learning of the loss or theft of an access device can be liable for up to $500 of unauthorized transfers that could have been prevented with timely notice.",
+      "verdict": "supported",
+      "section": "12 CFR 1005.6(b)(2)",
+      "url": "https://www.ecfr.gov/current/title-12/chapter-X/part-1005/subpart-A/section-1005.6",
+      "supporting_span": "If the consumer fails to notify the financial institution within two business days after learning of the loss or theft, the consumer's liability may rise to as much as $500 for unauthorized transfers that occur after the two days and that the institution could have prevented had it been notified.",
+      "topic": "liability; delayed notice; $500"
+    },
+    {
+      "id": "regE-liability-tier3-60day",
+      "claim": "Under Regulation E, a consumer can face unlimited liability for unauthorized transfers appearing on a periodic statement if the consumer does not report them within 60 days after the institution transmitted the statement.",
+      "verdict": "supported",
+      "section": "12 CFR 1005.6(b)(3)",
+      "url": "https://www.ecfr.gov/current/title-12/chapter-X/part-1005/subpart-A/section-1005.6",
+      "supporting_span": "A consumer must report an unauthorized transfer that appears on a periodic statement within 60 days of the financial institution's transmittal of the statement to avoid liability for subsequent transfers. If the consumer fails to do so, the consumer's liability is not limited for unauthorized transfers occurring after the 60-day period.",
+      "topic": "liability; statement reporting; 60 days"
+    },
+    {
+      "id": "regE-error-report-60day",
+      "claim": "Under Regulation E, a consumer must notify the financial institution of a suspected error no later than 60 days after the institution transmitted the periodic statement on which the error is first reflected.",
+      "verdict": "supported",
+      "section": "12 CFR 1005.11(b)(1)",
+      "url": "https://www.ecfr.gov/current/title-12/chapter-X/part-1005/subpart-A/section-1005.11",
+      "supporting_span": "A financial institution shall comply with the error resolution requirements if it receives oral or written notice from the consumer no later than 60 days after it sent the periodic statement on which the alleged error is first reflected.",
+      "topic": "error resolution; reporting deadline; 60 days"
+    },
+    {
+      "id": "regE-error-investigate-10day",
+      "claim": "Under Regulation E, a financial institution must investigate a reported error and determine whether it occurred within 10 business days of receiving the consumer's notice.",
+      "verdict": "supported",
+      "section": "12 CFR 1005.11(c)(1)",
+      "url": "https://www.ecfr.gov/current/title-12/chapter-X/part-1005/subpart-A/section-1005.11",
+      "supporting_span": "A financial institution shall investigate promptly and, except as otherwise provided, shall determine whether an error occurred within 10 business days of receiving a notice of error.",
+      "topic": "error resolution; investigation timeline; 10 business days"
+    },
+    {
+      "id": "regE-error-provisional-credit-45day",
+      "claim": "Under Regulation E, a financial institution may take up to 45 days to investigate an error only if it provisionally credits the consumer's account for the disputed amount (and any related fees) within 10 business days and promptly notifies the consumer of the credit.",
+      "verdict": "supported",
+      "section": "12 CFR 1005.11(c)(2)",
+      "url": "https://www.ecfr.gov/current/title-12/chapter-X/part-1005/subpart-A/section-1005.11",
+      "supporting_span": "If the institution is unable to complete its investigation within 10 business days, it may take up to 45 days from receipt of the notice of error to do so, provided that the institution provisionally credits the consumer's account within 10 business days for the amount of the alleged error and notifies the consumer of the amount and date of the provisional crediting.",
+      "topic": "error resolution; provisional credit; 45 days"
+    },
+    {
+      "id": "regE-error-extended-newaccount-pos-foreign",
+      "claim": "Under Regulation E, the error-resolution timelines are extended for certain transfers: the 10-business-day period becomes 20 business days for accounts open 30 days or less, and the 45-day period becomes 90 days for errors involving point-of-sale debit card transactions, foreign-initiated transfers, or new accounts.",
+      "verdict": "supported",
+      "section": "12 CFR 1005.11(c)(3)",
+      "url": "https://www.ecfr.gov/current/title-12/chapter-X/part-1005/subpart-A/section-1005.11",
+      "supporting_span": "The applicable time periods are 20 business days in place of 10 business days if the notice of error involves an account that has been open for 30 days or less, and 90 days in place of 45 days for completing an investigation, if the notice of error involves a transfer initiated at a point of sale, a transfer initiated outside the United States, or an account open for 30 days or less.",
+      "topic": "error resolution; extended timelines; new account; POS; foreign"
+    },
+    {
+      "id": "regE-stop-preauthorized-3day",
+      "claim": "Under Regulation E, a consumer may stop payment of a preauthorized electronic fund transfer from their account by notifying the financial institution orally or in writing at least three business days before the scheduled date of the transfer.",
+      "verdict": "supported",
+      "section": "12 CFR 1005.10(c)(1)",
+      "url": "https://www.ecfr.gov/current/title-12/chapter-X/part-1005/subpart-A/section-1005.10",
+      "supporting_span": "A consumer may stop payment of a preauthorized electronic fund transfer from the consumer's account by notifying the financial institution orally or in writing at least three business days before the scheduled date of the transfer.",
+      "topic": "preauthorized transfer; stop payment; 3 business days"
+    },
+    {
+      "id": "regE-stop-written-confirmation-14day",
+      "claim": "Under Regulation E, a financial institution that accepts an oral stop-payment order for a preauthorized transfer may require the consumer to provide written confirmation within 14 days, and the oral order ceases to be binding after 14 days if the consumer fails to provide it when required.",
+      "verdict": "supported",
+      "section": "12 CFR 1005.10(c)(2)",
+      "url": "https://www.ecfr.gov/current/title-12/chapter-X/part-1005/subpart-A/section-1005.10",
+      "supporting_span": "The financial institution may require the consumer to give written confirmation of a stop-payment order within 14 days of an oral notification. An oral stop-payment order ceases to be binding after 14 days if the consumer fails to provide the required written confirmation.",
+      "topic": "preauthorized transfer; written confirmation; 14 days"
+    },
+    {
+      "id": "regE-remittance-cancel-30min",
+      "claim": "Under Regulation E, a sender generally has the right to cancel a remittance transfer for a full refund within 30 minutes after payment, provided the transferred funds have not yet been picked up or deposited into the recipient's account.",
+      "verdict": "supported",
+      "section": "12 CFR 1005.34(a)",
+      "url": "https://www.ecfr.gov/current/title-12/chapter-X/part-1005/subpart-B/section-1005.34",
+      "supporting_span": "A remittance transfer provider shall comply with a request to cancel a remittance transfer if the request is received at least 30 minutes before the funds are available to the designated recipient. The provider must refund the total amount of funds provided by the sender within three business days of receiving the cancellation request.",
+      "topic": "remittance transfer; cancellation; 30 minutes; refund"
+    },
+    {
+      "id": "regE-remittance-error-180day",
+      "claim": "Under Regulation E, a sender must report a remittance-transfer error to the provider within 180 days of the disclosed date of availability, and the provider must investigate and determine whether an error occurred within 90 days of receiving the notice.",
+      "verdict": "supported",
+      "section": "12 CFR 1005.33(c)",
+      "url": "https://www.ecfr.gov/current/title-12/chapter-X/part-1005/subpart-B/section-1005.33",
+      "supporting_span": "If a sender provides notice of an error to the remittance transfer provider within 180 days of the disclosed date of availability of the remittance transfer, the provider shall investigate and determine whether an error occurred within 90 days of receiving the notice of error.",
+      "topic": "remittance transfer; error resolution; 180 days; 90 days"
+    }
+  ]
+}

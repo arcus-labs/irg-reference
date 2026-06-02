@@ -39,7 +39,9 @@ export async function POST(request: NextRequest) {
           enableFactCheck: body.enableFactCheck !== false,
           enableImpactPrediction: body.enableImpactPrediction !== false,
           enableAssessor: body.enableAssessor !== false,
-          enableFactCheckPipeline: body.enableFactCheckPipeline !== false,
+          // enableFactCheckPipeline intentionally NOT forwarded —
+          // the IRG server derives it from the `graph` field. See
+          // irg-api-server.js for the source of truth.
         }),
       }
     );
@@ -131,12 +133,14 @@ export async function GET() {
     const files = fs.readdirSync(tracesDir);
     const traces = files
       .filter((f: string) => f.endsWith('.irg') || f.endsWith('.json') || f.endsWith('.yaml'))
+      // Sort filenames (newest first) BEFORE mapping to objects — calling
+      // .sort() on an array of objects uses the default string comparator
+      // ("[object Object]") and does nothing.
+      .sort((a: string, b: string) => b.localeCompare(a))
       .map((f: string) => ({
         filename: f,
         path: `/traces/${f}`,
-      }))
-      .sort()
-      .reverse();
+      }));
 
     return NextResponse.json({ traces });
   } catch (error) {

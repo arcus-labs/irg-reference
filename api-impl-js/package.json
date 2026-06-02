@@ -5,7 +5,16 @@
   "main": "core/execution/irg-interpreter-linear.js",
   "scripts": {
     "test": "node test/test-interpreter.js",
-    "api": "node api/irg-api-server.js"
+    "api": "node api/irg-api-server.js",
+    "fact-store": "node scripts/fact-store.js",
+    "fact-store:stats": "node scripts/fact-store.js stats",
+    "fact-store:ls": "node scripts/fact-store.js ls",
+    "fact-store:prune": "node scripts/fact-store.js prune",
+    "fact-store:prune:dry": "node scripts/fact-store.js prune --dry-run",
+    "fact-store:export": "node scripts/fact-store.js export",
+    "bench:citations": "node bench/citation-bench.js",
+    "fact-store:sweep": "node scripts/fact-store-sweep.js",
+    "fact-store:sweep:dry": "node scripts/fact-store-sweep.js --dry-run"
   },
   "keywords": [
     "irg",
@@ -16,8 +25,12 @@
   "author": "Arcus Labs",
   "license": "CC-BY-SA-4.0",
   "dependencies": {
+    "@duckdb/node-api": "1.5.2-r.1",
+    "@mozilla/readability": "^0.6.0",
     "dotenv": "^16.0.0",
     "express": "^5.2.1",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "jsdom": "^25.0.1",
+    "turndown": "^7.2.4"
   }
 }

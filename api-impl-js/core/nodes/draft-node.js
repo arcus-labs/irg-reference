@@ -20,6 +20,25 @@ const {
   convertToMarkdown,
 } = require('./node-utils');
 const { buildFactCheckPromptResultSync } = require('../external-fact-check/claim-store');
+const { buildCitableSet } = require('../citations/build-citable-set');
+
+/**
+ * Render the citable set as a compact list for the draft prompt. The model
+ * only needs the handle, claim text, and verdict to decide where to wrap a
+ * <citation> tag — full source detail stays out of the prompt to save tokens.
+ */
+function renderCitableClaims(citableSet) {
+  if (!citableSet.length) return '';
+  return JSON.stringify(
+    citableSet.map((c) => ({
+      handle: c.handle,
+      claim_text: c.claim_text,
+      verdict: c.verdict, // "supported" | "refuted"
+    })),
+    null,
+    2
+  );
+}
 
 function firstNonEmptyString(...values) {
   for (const value of values) {
@@ -65,6 +84,16 @@ const draftNode = {
   prepare(state, prompts) {
     const executionContract = buildExecutionContract(state);
     const factCheckPromptResult = buildFactCheckPromptResultSync(state.factCheckResult);
+
+    // Build the citable set (verified + supported|refuted) from fresh
+    // verification (irg-external-facts) and/or recalled evidence (irg-simple).
+    // The model is told which claims it may cite; citationApply validates
+    // the tags it emits afterwards.
+    const citableSet = buildCitableSet({
+      citationVerifyResult: state.citationVerifyResult,
+      memoryRecallResult: state.memoryRecallResult,
+    });
+
     const prompt = buildPrompt(prompts.draft, {
       originalQuery:   state.originalQuery,
       context:         state.context,
@@ -75,11 +104,13 @@ const draftNode = {
       externalFactCheckResult: state.externalFactCheckResult || {},
       factCheckPipelineResult: state.factCheckPipelineResult || {},
       impactResult:    state.impactResult    || {},
+      citableClaims:   renderCitableClaims(citableSet),
     });
     return {
       ...state,
       draftPrompt: prompt,
       draftExecutionContract: executionContract,
+      citableSet,
       currentPhase: 'draft',
     };
   },
@@ -94,8 +125,28 @@ const draftNode = {
     const content = typeof llmResponse === 'object' ? llmResponse.content : llmResponse;
     const tokens = extractTokens(llmResponse);
 
-    const result = safeParseJson(content);
+    // Strip a surrounding ```/```lang code fence BEFORE parsing so fenced JSON
+    // parses normally and fenced prose can still be recovered below. (safeParseJson
+    // only repairs unbalanced JSON, so balanced fenced JSON would otherwise be lost.)
+    let parseSource = typeof content === 'string' ? content.trim() : content;
+    if (typeof parseSource === 'string' && parseSource.startsWith('```')) {
+      parseSource = parseSource.replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '').trim();
+    }
+
+    const result = safeParseJson(parseSource);
     let response = result.response || '';
+
+    // Robustness: some models ignore the "return JSON" instruction and emit
+    // the answer as raw markdown/prose. When JSON parsing yields no usable
+    // response but the (de-fenced) content is clearly not a JSON object/array,
+    // fall back to treating it as the response. Without this, a non-compliant
+    // model silently drops the entire answer — and any <citation> tags with it.
+    if (!response && typeof parseSource === 'string') {
+      const trimmed = parseSource.trim();
+      if (trimmed && !trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+        response = trimmed;
+      }
+    }
     const confidence = Number(result.confidence ?? 0.5);
     const executionContract = state.draftExecutionContract || buildExecutionContract(state);
 
